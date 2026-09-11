@@ -1,0 +1,49 @@
+-- Let the roles that insert into `shorts` actually evaluate `is_short`.
+--
+-- THE BUG, AND HOW IT WAS FOUND. The first real write this repo ever attempted
+-- against a live database failed:
+--
+--   upsertShorts: permission denied for function short_max_seconds
+--
+-- Not a policy, not a table grant -- a FUNCTION grant, refused before RLS was
+-- reached. Every insert into `shorts_scraper.shorts` would have failed, for
+-- every role, since migration 05 shipped.
+--
+-- WHY IT WAS NOT CAUGHT. Migration 05 revoked EXECUTE on this function from
+-- `public` and `anon` and granted it back to nobody, on this stated reasoning:
+--
+--   "`short_max_seconds()` is used by the generated column on `shorts`, which
+--    is evaluated as the table owner, not as the caller. Nobody else needs it."
+--
+-- That is wrong, and it is worth being precise about how. A STORED generated
+-- column's expression is evaluated during the INSERT, in the privilege context
+-- of the role performing the insert -- not the table owner's. Owner privileges
+-- apply to SECURITY DEFINER functions and to RLS policy bodies; a generated
+-- column is neither. So the one role that "nobody" excluded was every role that
+-- writes.
+--
+-- It survived review because it is invisible to static analysis of the kind
+-- tests/migrations.test.ts performs: no application file calls
+-- `short_max_seconds()`, so the operation scanner never sees it, and the
+-- function-grant checks only assert that the SECURITY DEFINER functions are
+-- locked down. The call site is a CHECK-style expression inside a column
+-- definition. Only an actual INSERT reaches it, which is why an audit that
+-- reads migrations could not have found this and a single live round-trip did.
+--
+-- tests/migrations.test.ts now asserts the general rule this file is one
+-- instance of: every function named inside a generated-column expression must
+-- be executable by every role granted INSERT on that table.
+
+-- `immutable` and `parallel safe`, returning a constant, with no table access
+-- and no arguments: there is nothing here to abuse. It is granted narrowly
+-- anyway -- to the two roles that write to `shorts`, and not to `anon` or
+-- `public` -- so the default established by migration 05 stands unchanged for
+-- everything else.
+grant execute on function shorts_scraper.short_max_seconds() to service_role;
+
+-- `authenticated` too. Nothing signs in today, so nothing exercises this right
+-- now, but the grant belongs with the INSERT grant that migration 06 gave that
+-- role: leaving them disagreeing is how this defect happened in the first
+-- place. If sign-in is ever restored, the write path works rather than failing
+-- on a line nobody would think to look at.
+grant execute on function shorts_scraper.short_max_seconds() to authenticated;

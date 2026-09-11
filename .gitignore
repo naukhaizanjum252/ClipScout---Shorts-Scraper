@@ -1,0 +1,13 @@
+node_modules
+.next
+.env*
+!.env.example
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# Supabase CLI scratch. `.temp/project-ref` records WHICH project this checkout
+# is linked to, and that is a per-machine choice, not a repo fact — especially
+# here, where the target is a database shared with other projects and linking
+# the wrong one points `db push` at a co-tenant.
+supabase/.temp/

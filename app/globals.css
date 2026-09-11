@@ -1,0 +1,2121 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   shorts-scraper. See DESIGN.md.
+
+   Ported from the impressions console — same client, same team, same house
+   system. Erik, 2026-09-04, looking at the running app: *"Same style as all of
+   the other luka tools please."* Tokens, fonts, radii, easings and the class
+   vocabulary below are the impressions ones; deviations are marked and
+   justified in place.
+
+   Depth instead of rules: translucent panels over a deep aurora, separated by
+   elevation rather than grey hairlines. The curation state is this product's
+   tier and gets a colour and a mark. Violet is the interface — buttons, focus,
+   links, the active nav — and never data, so anything violet is something you
+   press.
+   --------------------------------------------------------------------------- */
+
+@theme {
+  --font-display: var(--font-display-loaded), "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: var(--font-body-loaded), Inter, "Segoe UI", sans-serif;
+  --font-mono: var(--font-mono-loaded), "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-sans: var(--font-body-loaded), Inter, "Segoe UI", sans-serif;
+}
+
+:root {
+  --ground: #08080f;
+  --ground-2: #0f1020;
+  --surface: rgba(255, 255, 255, 0.038);
+  --surface-2: rgba(255, 255, 255, 0.06);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-soft: rgba(255, 255, 255, 0.05);
+
+  --ink: #f3f4fa;
+  --muted: #9aa2be;
+  /* impressions ships --faint at #666e8c. Lifted here, same hue, because in
+     this tool --faint carries the table's column headers and the one line of
+     small print that explains why a figure is an em dash — text somebody has to
+     read, not chrome. #666e8c measures 3.9:1 on a lit panel; this measures
+     4.8:1. Side by side with impressions nobody sees the difference. */
+  --faint: #7f87a6;
+
+  /* The interface. Never data. */
+  --accent: #7c5cff;
+  --accent-2: #22d3ee;
+  --accent-soft: rgba(124, 92, 255, 0.16);
+
+  /* Tiers. Data only — these never become a button.
+     In impressions these are impression bands. Here they are the curation
+     state, which is the whole product: approved is the win, candidate is the
+     working set waiting on a human, unlisted is deliberate quiet context. */
+  --tier-high: #34d399;
+  --tier-mid: #fbbf24;
+  --tier-low: #64748b;
+  /* The slate reads as a rank on a 3px pip but not as 11px type: #64748b is
+     3.6:1 on a lit panel. Same family, lifted, for anywhere tier-low is TEXT. */
+  --tier-low-ink: #94a3b8;
+  --signal: #fb7185;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --lift: 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  --lift-lg: 0 30px 70px -30px rgba(0, 0, 0, 0.95);
+
+  /* ---- compatibility aliases -----------------------------------------------
+     The names the pre-restyle app was written against, kept pointing at the new
+     tokens so no file outside this one has to be renamed. New work should use
+     the tokens above; these exist so a five-file restyle does not become a
+     rename storm. --danger and --ok are the interesting pair: they were a
+     true/false read of the curation state, and this system does not think of
+     unlisting as a failure, so --danger now aliases the tier that means "a
+     person decided this" and --signal is reserved for things that are actually
+     wrong. */
+  --background: var(--ground);
+  --foreground: var(--ink);
+  --line: var(--hairline);
+  --danger: var(--signal);
+  --ok: var(--tier-high);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-hairline: var(--hairline);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-tier-high: var(--tier-high);
+  --color-tier-mid: var(--tier-mid);
+  --color-tier-low: var(--tier-low);
+  --color-signal: var(--signal);
+}
+
+/* Single-theme by design: a dark console. Every colour is painted explicitly,
+   so it holds whatever ground the host paints behind it. The light/dark
+   media-query palette this replaced meant the same figure had two appearances
+   and neither was designed; a tool forty people read numbers off should look
+   the same on every desk. */
+html {
+  color-scheme: only dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--ground);
+  /* The aurora. Fixed, so it does not slide around under a long table. */
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, rgba(124, 92, 255, 0.2), transparent 60%),
+    radial-gradient(48rem 34rem at 92% 4%, rgba(34, 211, 238, 0.14), transparent 62%),
+    radial-gradient(52rem 40rem at 50% 108%, rgba(124, 92, 255, 0.1), transparent 60%),
+    linear-gradient(180deg, var(--ground) 0%, var(--ground-2) 100%);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* A link is interface, so it is violet. */
+.link {
+  color: var(--accent-2);
+  font-weight: 500;
+  transition: color 150ms var(--ease);
+}
+
+.link:hover {
+  color: #67e8f9;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- shell ---------------------------------------------------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: 236px 1fr;
+  min-height: 100vh;
+}
+
+.rail {
+  border-right: 1px solid var(--hairline-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  backdrop-filter: blur(14px);
+  padding: 22px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mark {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 2px 10px 20px;
+  color: var(--ink);
+}
+
+.mark span {
+  display: block;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+
+.nav-item {
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition:
+    background 160ms var(--ease),
+    color 160ms var(--ease);
+}
+
+.nav-item:hover {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.nav-item[data-active="true"],
+.nav-item[aria-current="page"] {
+  color: var(--ink);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.32);
+}
+
+/* --- nav credits chip ----------------------------------------------------- */
+/* Sits at the foot of the rail (margin-top:auto pushes it below the nav in the
+   flex column). A quiet readout, not a call to action: the balance is the only
+   figure, and the check button is small because pressing it costs a credit. */
+.nav-credits {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px 2px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.nav-credits-label {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.nav-credits-figure {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-credits-none {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.nav-credits-age {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.nav-credits-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 160ms var(--ease),
+    color 160ms var(--ease),
+    border-color 160ms var(--ease);
+}
+
+.nav-credits-btn:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.nav-credits-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.nav-credits-error {
+  color: var(--signal);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.main {
+  padding: 34px 38px 80px;
+  max-width: 1280px;
+}
+
+/* --- page head ------------------------------------------------------------ */
+
+.page-head {
+  margin-bottom: 28px;
+}
+
+.page-head h1 {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.page-head p {
+  color: var(--muted);
+  margin: 10px 0 0;
+  max-width: 74ch;
+  font-size: 14px;
+}
+
+.eyebrow {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+}
+
+.eyebrow a:hover {
+  color: var(--accent);
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* --- surfaces ------------------------------------------------------------- */
+
+.panel,
+.table-wrap,
+.figures,
+.auth-card {
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--lift);
+}
+
+.panel {
+  padding: 20px 22px;
+}
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 14px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 16px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* --- report body: the sections, and the file beside them ------------------ */
+
+/* One column by default, and the aside is written first, so a narrow screen
+   gets yesterday's page: the export panel, then the platform sections. The
+   second column is added back below, and only where there is room for it. */
+.report-body {
+  display: grid;
+  gap: 24px;
+}
+
+/* THE SECOND COLUMN IS EARNED, NOT ASSUMED.
+
+   1180px is where the aside's 380px still leaves the sections a column wide
+   enough to read a table in — .main caps at 1280px and pads 38px a side, so
+   below this the left column starts eating into the row text and the tables
+   scroll sideways for no reason. Above it, the space was empty anyway. */
+@media (min-width: 1180px) {
+  .report-body-split {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    /* Without this the aside stretches to the full height of the row and
+       sticky has nothing left to travel in. */
+    align-items: start;
+  }
+
+  /* Explicit placement rather than source order: the aside is the FIRST child
+     and still belongs on the right. */
+  .report-body-split > .stack {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .report-body-split > .report-aside {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 20px;
+    /* A panel this tall would otherwise pin its top at 20px and keep its own
+       bottom — the box of links, and the count of what is missing from it —
+       permanently below the fold. It scrolls inside itself instead. */
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    /* Overflow clips both axes, and .panel's lift lives outside its border
+       box. Pad to give the shadow room, then pull the padding back so the
+       column still lines up with the sections beside it. */
+    padding: 8px;
+    margin: -8px;
+  }
+}
+
+.notice {
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  background: linear-gradient(180deg, rgba(251, 113, 133, 0.14), rgba(251, 113, 133, 0.05));
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.notice strong {
+  color: var(--signal);
+  font-family: var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* The quiet sibling of .notice: a statement of scope or a caveat, not an alarm.
+   Most of the sentences on these pages are this — they are here because a
+   review round caught the page claiming more than it knew, and they read as
+   context rather than as something being wrong. */
+.note {
+  border: 1px solid var(--hairline-soft);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm);
+  padding: 13px 15px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.notice code,
+.note code,
+.landing code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+/* The numbered errands in a credential slot — see `CredentialStep` in
+   lib/credentials/providers.ts. X takes two links rather than one (buy the
+   credits, then fetch the token) and the ORDER is the information, so this is a
+   real <ol> with its markers on show. The marker takes `--accent` because a
+   number here labels something to go and DO, which is exactly what DESIGN.md
+   reserves violet for. */
+.steps {
+  margin: 0;
+  padding-left: 1.5em;
+  list-style: decimal;
+  display: grid;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-width: 74ch;
+}
+
+.steps > li {
+  color: var(--muted);
+  padding-left: 2px;
+}
+
+.steps > li::marker {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 13.5px;
+}
+
+/* --- figures: stat tiles -------------------------------------------------- */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.figure {
+  padding: 18px 20px;
+  border-right: 1px solid var(--hairline-soft);
+}
+
+.figure:last-child {
+  border-right: none;
+}
+
+.figure .v {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  display: block;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+.figure .k {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  display: block;
+  margin-top: 9px;
+}
+
+/* Tier colour lands on the figure, so the shape of a page reads at a glance
+   without anybody parsing a label. Solid, not a gradient: this is a
+   measurement, and a number that fades across its own digits is decoration
+   fighting the thing it is supposed to state. */
+.figure .v.tier-high,
+.figure .v.band-high {
+  color: var(--tier-high);
+}
+
+.figure .v.tier-mid,
+.figure .v.band-mid {
+  color: var(--tier-mid);
+}
+
+.figure .v.tier-low,
+.figure .v.band-low {
+  color: var(--tier-low-ink);
+}
+
+.figure .v.attention {
+  color: var(--signal);
+}
+
+/* --- numbers -------------------------------------------------------------- */
+
+/* Mono, tabular, never abbreviated in a table. */
+.num,
+td.num,
+th.num {
+  text-align: right;
+}
+
+.num,
+td.num,
+.figure .v {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An unmeasured figure is an em dash, never a zero — and never a bare em dash
+   either. Every one of these carries a title saying WHY the number is absent,
+   which is a claim the app is making and has to keep. The dotted rule is the
+   affordance that says the dash has more to tell you; it is deliberately quiet,
+   because the dash is an admission and not a warning. */
+.unknown {
+  color: var(--faint);
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 4px;
+}
+
+/* A DERIVED FIGURE IS NOT A MEASURED ONE, AND THE COLUMN HAS TO SAY SO.
+   Instagram keyword-search rows carry a view count this app computed from the
+   like count (lib/platform/scrapecreators.ts, INSTAGRAM_LIKES_TO_VIEWS) because
+   the endpoint publishes none. That number is compared against the 500,000
+   threshold and can put a row in the kept list, so it sits in the same column,
+   in the same tabular figures, as numbers a source actually reported.
+
+   Amber rather than the faint grey of `.unknown`, because these are opposites:
+   an em dash is the app admitting it does not know, and this is the app having
+   made something up on purpose. The second one is the one to catch your eye.
+   The "≈" carried in the markup is the half of this that survives a screenshot
+   into a chat window, which is where these tables actually get read. */
+.derived {
+  color: var(--tier-mid);
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--tier-mid) 45%, transparent);
+  text-underline-offset: 4px;
+  white-space: nowrap;
+}
+
+/* --- tables --------------------------------------------------------------- */
+
+.table-wrap {
+  overflow-x: auto;
+  position: relative;
+}
+
+/* A PLATFORM'S ROWS IN A BOX, NOT DOWN THE PAGE.
+   Erik, 2026-09-05: "we just don't want the screen to go on forever ... so we
+   will have 5 blocks of 10 instead of 200 records on one screen."
+
+   Nothing here removes a row. The whole list is in the DOM and reachable by
+   scrolling, by Ctrl+F and by a screen reader; this caps the HEIGHT of the
+   window onto it. The class is only applied when there is something to scroll
+   to, so a platform that found three rows keeps a box three rows tall instead
+   of a tall one with a stub in the top of it. */
+.table-scroll {
+  /* One row's height. A 64px-wide thumbnail at a Short's 9:16 is 114px tall,
+     plus the 14px of padding `tbody td` puts above and below it.
+
+     AN ESTIMATE, DELIBERATELY, and it does not need to be exact: being a little
+     out means the eleventh row is cut in half at the bottom edge, which is the
+     clearest signal a list has more in it than a perfectly flush cut would be.
+     It is a number about how tall a row looks, and it belongs in the stylesheet
+     that decides that; the row COUNT comes from TypeScript, below. */
+  --row-height: 142px;
+  /* The heading row, which is sticky and so always occupies the box. */
+  --head-height: 40px;
+
+  /* `--rows-before-scroll` is set inline by the console from ROWS_BEFORE_SCROLL
+     in app/(admin)/admin/shorts/view.ts — one number, in one place, next to the
+     other display figures. The 10 here is the fallback for a box that somehow
+     renders without it, never the source of truth.
+
+     `min()` is what stops the fix from recreating the problem: ten rows at
+     142px is 1420px, which is taller than the laptop it is being read on, so
+     one platform would still fill a screen and a half. On a short viewport the
+     box gives up rows rather than becoming a thing you scroll the page to
+     scroll. */
+  max-height: min(
+    calc(var(--rows-before-scroll, 10) * var(--row-height) + var(--head-height)),
+    72vh
+  );
+  overflow-y: auto;
+  /* Reaching the bottom of this box must not start scrolling the page behind
+     it — with five of these stacked, that is how somebody ends up somewhere
+     else on the page while trying to read row eleven. */
+  overscroll-behavior: contain;
+}
+
+/* The column headings stay while the rows move under them. Without this a
+   scrolled box is a grid of numbers with nothing left saying which column is
+   views and which is length. */
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* --surface is translucent, so on its own the rows would scroll visibly
+     through the headings. The opaque layer underneath is what makes this a
+     header rather than a smear; the gradient is the flat --surface tint
+     composited over the page's own ground so the tone still matches the panel. */
+  background: linear-gradient(var(--surface), var(--surface)), var(--ground);
+  /* `border-collapse: collapse` hands the border to the TABLE, and a table's
+     borders do not travel with a sticky cell — the rule under the headings
+     scrolls away and rows appear to run into them. An inset shadow belongs to
+     the cell and stays. */
+  box-shadow: inset 0 -1px 0 var(--hairline);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+caption {
+  text-align: left;
+}
+
+thead th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+thead th.num {
+  text-align: right;
+}
+
+tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline-soft);
+  vertical-align: top;
+}
+
+tbody th[scope="row"] {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline-soft);
+  vertical-align: top;
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+tbody tr:last-child td,
+tbody tr:last-child th[scope="row"] {
+  border-bottom: none;
+}
+
+tbody tr {
+  transition: background 140ms var(--ease);
+}
+
+tbody tr:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.rank {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  width: 1%;
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--muted);
+}
+
+.faint {
+  color: var(--faint);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* The state pip: a rounded mark on the leading edge of the row rather than a
+   hairline border, so a curation state reads as a rank and not as a table
+   rule. Row-level colour is the only place tier-low appears at full strength;
+   as a 3px shape it clears the 3:1 a non-text indicator owes. */
+.stripe td:first-child,
+.stripe th:first-child {
+  position: relative;
+}
+
+.stripe td:first-child::before,
+.stripe th:first-child::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--tier-low);
+  opacity: 0.75;
+}
+
+.stripe-approved td:first-child::before,
+.stripe-approved th:first-child::before,
+.stripe-ok td:first-child::before {
+  background: var(--tier-high);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.55);
+}
+
+.stripe-candidate td:first-child::before,
+.stripe-candidate th:first-child::before,
+.stripe-warn td:first-child::before {
+  background: var(--tier-mid);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+}
+
+/* No glow. Unlisted is a decision somebody made and then stopped thinking
+   about; it should sit on the page without asking for attention. */
+.stripe-unlisted td:first-child::before,
+.stripe-unlisted th:first-child::before {
+  background: var(--tier-low);
+  opacity: 0.9;
+}
+
+.stripe-signal td:first-child::before,
+.stripe-signal th:first-child::before {
+  background: var(--signal);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.5);
+}
+
+/* --- the state chip -------------------------------------------------------
+   Curation state is the entire product, so it gets the treatment a game gives a
+   rank. This is the one place a pill earns itself, because the value is a
+   status and not a measurement.
+
+   It never relies on colour alone: a chip carries a word and a mark, and the
+   mark is aria-hidden so a screen reader gets the word once, not twice. Do not
+   remove either half to make it tidier — a colourblind operator and a greyscale
+   screenshot both have to be able to read the state.
+   --------------------------------------------------------------------------- */
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The mark, when the caller supplies one, is a real character in the markup.
+   This dot is the fallback glow for chips that carry no glyph. */
+.state-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.state .state-mark {
+  font-family: var(--font-mono);
+  line-height: 1;
+  opacity: 0.9;
+}
+
+/* Approved: the win. */
+.state-approved,
+.state-ok {
+  color: var(--tier-high);
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+/* Candidate: the working set, waiting on a human. */
+.state-candidate,
+.state-warn {
+  color: var(--tier-mid);
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+/* Unlisted: a person looked at this and said no. Quiet slate, not red — this is
+   the product working, not the product failing. */
+.state-unlisted {
+  color: var(--tier-low-ink);
+  border-color: rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.09);
+}
+
+/* Reserved for something actually wrong — a fetch that failed, a key that is
+   missing. Not a curation state. */
+.state-signal {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.35);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.state-idle {
+  color: var(--faint);
+}
+
+/* --- forms ---------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field > span,
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field input,
+.field select,
+.field textarea,
+.input {
+  background: rgba(8, 8, 15, 0.55);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 11px 13px;
+  transition:
+    border-color 150ms var(--ease),
+    box-shadow 150ms var(--ease);
+}
+
+.field input:hover,
+.field select:hover,
+.field textarea:hover,
+.input:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+}
+
+/* Keys, handles and figures are read character by character. */
+.field input[type="password"],
+.field input[name="apiKey"],
+.field input[type="url"],
+.field input[type="email"],
+.field input[inputmode="numeric"],
+.input-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+/* A figure with a known small range — a count of videos, not a view threshold —
+   gets a box the size of the number. A 200-max input as wide as a seven-digit
+   one reads as a field expecting seven digits. */
+.input-narrow {
+  width: 8ch;
+}
+
+/* --- checkbox group -------------------------------------------------------
+   Five platforms, ticked or not. A fieldset so the group has a name before the
+   boxes, and no border of its own — DESIGN.md separates with elevation, and
+   this sits inside a panel that already has some.
+   --------------------------------------------------------------------------- */
+
+/* The gap above is HERE and not a `mt-*` utility on the element. A fieldset
+   carries a browser default margin that has to be cleared, and `margin: 0` in
+   this rule beats a Tailwind utility of the same specificity that comes earlier
+   in the sheet — so the utility silently computed to 0px and the group sat
+   crammed against the inputs above it. Owning the whole margin here is the
+   version that cannot be quietly cancelled.
+
+   Twenty and not twelve: a `.field` puts 7px between its own label and its box,
+   so a second uppercase label 12px under the first row reads as belonging to
+   it. The gap between groups has to beat the gap inside one. */
+.checks {
+  border: 0;
+  margin: 20px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.checks legend {
+  /* `float` rather than `display: block`, because a legend is laid out by the
+     fieldset and not by its flex context: as a flex item it lands in the row
+     with the boxes. Floating it puts it on its own line above them, which is
+     where a group label belongs. */
+  float: left;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: rgba(8, 8, 15, 0.55);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 150ms var(--ease),
+    color 150ms var(--ease),
+    background 150ms var(--ease);
+}
+
+.check:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+
+/* Violet is the interface — DESIGN.md — and a checkbox is something you press,
+   so the tick is the accent. The LABEL follows it; colour is never the only
+   signal, because the box itself is a real checkbox and carries the state on
+   its own.
+
+   SCAR, 2026-09-05, found by unticking a box in a real browser rather than in
+   jsdom. This rule was `.check:has(input:checked)`, which is the obvious way to
+   write it and which Chrome does not repaint when React flips the `checked`
+   property: `matches('.check:has(input:checked)')` returned false on the
+   unticked label while its computed background stayed violet. An operator
+   unticking TikTok saw TikTok stay lit — a control lying about the run it is
+   about to authorise. The class comes from React now, so the state that decides
+   the request is the same state that decides the colour. */
+.check-on {
+  color: var(--ink);
+  border-color: rgba(124, 92, 255, 0.4);
+  background: rgba(124, 92, 255, 0.09);
+}
+
+/* RADIOS TOO, and the selector says both rather than dropping to `.check
+   input`. A `.check` holds exactly one control and it is one of these two — the
+   platform boxes on /admin/shorts are checkboxes because a run may read any
+   combination, the export's two link formats are radios because a file is one
+   list or the other. Naming both keeps the rule a statement about the two
+   controls this chip is built for; `.check input` would silently adopt a text
+   field somebody drops in here later and size it 15px square. */
+.check input[type="checkbox"],
+.check input[type="radio"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.check input[type="checkbox"]:focus-visible,
+.check input[type="radio"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled,
+.input:disabled {
+  color: var(--faint);
+  opacity: 0.7;
+}
+
+.field .hint,
+.hint {
+  color: var(--faint);
+  font-size: 11.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.field-error {
+  color: var(--signal);
+  font-size: 13px;
+  margin: 0;
+}
+
+.field-ok {
+  color: var(--tier-high);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* A form laid out as rows, one field per row by default.
+
+   It was `repeat(auto-fit, minmax(200px, 1fr))`, which sizes columns from how
+   much room the panel happens to have rather than from what the form holds.
+   Two fields in a wide panel got two of the four or five tracks that fitted and
+   sat squeezed into its left quarter; the submit button took a track of its
+   own and — grid items stretching by default — grew to the height of a
+   four-row textarea, a 200px violet slab with "Add topic" floating in the
+   middle of it. Track counts are declared here now, per form, so a layout is
+   something the form asks for and not a number the viewport arrived at. */
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+/* A button's width should say how much text it holds, and its height should be
+   its own — never the tallest field beside it. */
+.form-grid > .btn {
+  justify-self: start;
+  align-self: start;
+}
+
+/* Two fields side by side, the button on its own row under both.
+
+   The second column is the wider one because these two are never equals: the
+   name is a handful of words somebody reads back, the terms are the mechanism
+   and get edited line by line. `1 / -1` puts the button below them rather than
+   beside, where a control you press once would otherwise claim a third of a
+   row it does not use. Below 760px the columns collapse to the single-column
+   default above and the fields simply stack. */
+@media (min-width: 760px) {
+  .form-grid-2 {
+    grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.55fr);
+    column-gap: 20px;
+  }
+
+  .form-grid-2 > .btn {
+    grid-column: 1 / -1;
+  }
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* --- buttons -------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--accent), #5b3ff0);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 11px 18px;
+  cursor: pointer;
+  box-shadow:
+    0 8px 22px -10px rgba(124, 92, 255, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition:
+    transform 140ms var(--ease),
+    box-shadow 160ms var(--ease),
+    filter 160ms var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow:
+    0 14px 30px -12px rgba(124, 92, 255, 1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  background: var(--surface-2);
+  color: var(--faint);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn-quiet {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--hairline);
+  box-shadow: none;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: rgba(124, 92, 255, 0.5);
+  background: var(--accent-soft);
+  filter: none;
+}
+
+.btn-small {
+  padding: 6px 11px;
+  font-size: 11.5px;
+  border-radius: 8px;
+}
+
+/* Unlisting is destructive to a channel's place in the list but it is not an
+   error, and it is reversible. So: a quiet outline that warms up on hover,
+   never a standing red block. */
+.btn-danger {
+  background: transparent;
+  color: var(--faint);
+  border: 1px solid var(--hairline);
+  box-shadow: none;
+}
+
+.btn-danger:hover:not(:disabled) {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.6);
+  background: rgba(251, 113, 133, 0.1);
+  filter: none;
+}
+
+/* --- rail footer ---------------------------------------------------------- */
+
+.rail-foot {
+  margin-top: auto;
+  padding: 16px 12px 0;
+  border-top: 1px solid var(--hairline-soft);
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.6;
+}
+
+.rail-foot .who {
+  color: var(--ink);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.rail-foot form {
+  margin-top: 12px;
+}
+
+.rail-foot .btn {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 12.5px;
+}
+
+/* --- auth ----------------------------------------------------------------- */
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--lift-lg);
+}
+
+.auth-foot {
+  color: var(--faint);
+  font-size: 12px;
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+
+/* --- landing -------------------------------------------------------------- */
+
+.landing {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px 90px;
+}
+
+.landing-inner {
+  max-width: 620px;
+}
+
+/* The colour sits BEHIND the headline rather than inside the letterforms — a
+   glow the type is lit by, not a gradient smeared across it. */
+.landing h1 {
+  position: relative;
+  font-size: clamp(44px, 9vw, 76px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  margin-bottom: 22px;
+  color: #fff;
+}
+
+.landing h1::before {
+  content: "";
+  position: absolute;
+  left: -12%;
+  top: -70%;
+  width: 78%;
+  height: 260%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(124, 92, 255, 0.45), transparent 72%);
+}
+
+.landing p {
+  color: var(--muted);
+  font-size: 15px;
+  margin: 0 0 16px;
+  line-height: 1.7;
+}
+
+.landing .rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--hairline), transparent);
+  margin: 30px 0;
+}
+
+.landing dl {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 14px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.landing dt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  background: var(--accent-soft);
+}
+
+.landing dd {
+  margin: 0;
+  color: var(--muted);
+  padding-top: 2px;
+}
+
+/* --- key/value ------------------------------------------------------------ */
+
+.kv {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px 16px;
+  font-size: 13.5px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--faint);
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding-top: 3px;
+}
+
+.kv dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+/* The estimate's per-platform reason. It sits under the state phrase rather
+   than in a `title` attribute, because a tooltip is not readable on a touch
+   screen and this sentence is the whole difference between "will not run" and
+   knowing what to go and configure. Body font and a narrow measure: it is
+   prose, and the mono column beside it is not. */
+.forecast-why {
+  margin: 2px 0 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--faint);
+  max-width: 68ch;
+}
+
+/* The long half of a reason, folded. Five platforms each writing a paragraph
+   turned this panel into an essay; the lead sentence stays on the line and the
+   rest opens on a click — still on the page, because a tooltip is unreadable
+   on a touch screen. */
+details.forecast-why > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details.forecast-why > summary::-webkit-details-marker {
+  display: none;
+}
+
+.forecast-more {
+  color: var(--muted);
+  text-decoration: underline dotted;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.forecast-more::after {
+  content: " ▸";
+}
+
+details.forecast-why[open] .forecast-more::after {
+  content: " ▾";
+}
+
+details.forecast-why > summary:hover .forecast-more {
+  color: var(--ink);
+}
+
+details.forecast-why > p {
+  margin: 6px 0 0;
+}
+
+/* --- filters and search --------------------------------------------------- */
+
+/* The filter sits beside the heading rather than above the table, so it reads
+   as a property of the list rather than another form field. */
+.list-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.list-head h2 {
+  margin: 0;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* THE TWO BUTTONS WRAP TOGETHER OR NOT AT ALL.
+
+   The run panel gained a fifth control on 2026-09-07 — the subject menu — and
+   the row stopped fitting on one line at the page's own width: 1211px of
+   controls in 1058px of panel. Left as loose flex children, the overflow put
+   "What will this cost?" alone on a second line, under the menu, reading as an
+   orphan rather than as the pair it belongs to.
+
+   Grouping them makes the wrap deliberate: fields on one line, the two verbs on
+   the next. It is one rule rather than a width cap on the menu, because a
+   truncated subject name in a closed `select` would be the screen abbreviating
+   the one thing the run is about. */
+.filter-actions {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.search-field {
+  position: relative;
+}
+
+.search-field input {
+  padding-right: 84px;
+}
+
+/* Cancel Safari's and Chrome's own clear affordance: it lands under the Clear
+   button and gives the box two of them. */
+.search-field input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.search-clear {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+}
+
+/* --- searchable combobox (the "Look for" subject picker) -------------------
+   A real dropdown: a trigger that reads like the other controls, and a popover
+   carrying a search box over a scrollable, filtered list. Built because a
+   thirty-item native <select> is a scroll, not a search.
+   --------------------------------------------------------------------------- */
+.combo {
+  position: relative;
+}
+
+.combo-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 240px;
+  background: rgba(8, 8, 15, 0.55);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  text-align: left;
+  padding: 11px 13px;
+  cursor: pointer;
+  transition:
+    border-color 150ms var(--ease),
+    box-shadow 150ms var(--ease);
+}
+
+.combo-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.combo-trigger:focus-visible,
+.combo-trigger[aria-expanded="true"] {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+}
+
+.combo-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combo-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 150ms var(--ease);
+}
+
+.combo-trigger[aria-expanded="true"] .combo-chevron {
+  transform: rotate(-135deg) translateY(1px);
+}
+
+.combo-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  min-width: 260px;
+  padding: 8px;
+  background: rgba(15, 16, 32, 0.98);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--lift-lg);
+  backdrop-filter: blur(16px);
+}
+
+.combo-search {
+  width: 100%;
+  background: rgba(8, 8, 15, 0.55);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+}
+
+.combo-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+}
+
+.combo-search[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.combo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 264px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.combo-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 9px 11px;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease);
+}
+
+.combo-option.is-active {
+  background: var(--accent-soft);
+}
+
+.combo-option.is-selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.combo-empty {
+  color: var(--faint);
+  font-size: 13px;
+  padding: 10px 11px;
+}
+
+/* --- run loading state ---------------------------------------------------- */
+.run-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 240px;
+  text-align: center;
+}
+
+.run-loading-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.run-loading-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.run-spinner {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid var(--hairline);
+  border-top-color: var(--accent);
+  animation: run-spin 0.8s linear infinite;
+}
+
+@keyframes run-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-spinner {
+    animation: none;
+  }
+}
+
+/* --- run fact chips ------------------------------------------------------- */
+.run-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.run-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink-2, inherit);
+  white-space: nowrap;
+}
+
+.run-fact .mono {
+  color: var(--ink, inherit);
+}
+
+.run-fact-topic {
+  border-color: var(--accent);
+}
+
+.run-fact-muted {
+  opacity: 0.72;
+}
+
+/* --- already-in-library note --------------------------------------------- */
+.carried-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.carried-note button {
+  margin-left: auto;
+}
+
+/* --- library -------------------------------------------------------------- */
+.lib-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.lib-tab {
+  background: rgba(8, 8, 15, 0.55);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition:
+    border-color 150ms var(--ease),
+    color 150ms var(--ease),
+    background-color 150ms var(--ease);
+}
+
+.lib-tab:hover {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.lib-tab[data-active="true"] {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.lib-plat {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.lib-used {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A used clip is still there to read, just visibly done. */
+tbody tr[data-used="true"] {
+  opacity: 0.6;
+}
+
+/* --- short cards ---------------------------------------------------------- */
+.short-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.short-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--lift);
+  transition:
+    transform 200ms var(--ease),
+    box-shadow 200ms var(--ease),
+    border-color 200ms var(--ease);
+}
+
+.short-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: var(--lift-lg);
+}
+
+.short-card[data-dim] {
+  opacity: 0.5;
+}
+
+.short-thumb {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--ground-2);
+}
+
+.short-thumb a,
+.short-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.short-thumb img {
+  object-fit: cover;
+}
+
+.short-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(140deg, var(--ground-2), var(--surface-2));
+  color: var(--faint);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.short-plat {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(8, 8, 15, 0.72);
+  backdrop-filter: blur(6px);
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.short-dur {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(8, 8, 15, 0.8);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.short-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 13px;
+}
+
+.short-views {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.short-views-unit {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.short-title {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.35;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+a.short-title:hover {
+  color: var(--accent);
+}
+
+.short-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.short-topic {
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.short-card-foot {
+  margin-top: auto;
+  padding: 0 13px 13px;
+}
+
+/* The "why it could not be judged" line on an unverified card. */
+.short-caveat {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--tier-mid);
+}
+
+.short-nolink {
+  font-size: 11px;
+  color: var(--signal);
+}
+
+/* The "unmeasured" badge on a Library card that came from the unverified table.
+   Amber, like the search page's unmeasured tier — not red (not an error) and
+   not green (not a confirmed find). */
+.short-flags {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.short-flag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--tier-mid, rgba(245, 179, 66, 0.5));
+  color: var(--tier-mid, #f5b342);
+  background: rgba(245, 179, 66, 0.08);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* An opt-in "what do these controls mean?" fold, so the help is a click away
+   rather than a wall of text under every run. */
+.controls-help > summary {
+  cursor: pointer;
+  width: fit-content;
+  color: var(--muted);
+  font-size: 12px;
+  list-style: none;
+}
+
+.controls-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.controls-help > summary::before {
+  content: "＋ ";
+}
+
+.controls-help[open] > summary::before {
+  content: "－ ";
+}
+
+.controls-help > summary:hover {
+  color: var(--ink);
+}
+
+.controls-help[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* --- inline row editor -----------------------------------------------------
+   A <details> rather than a modal: an operator editing a topic wants the list
+   it belongs to still on screen, and a dialog would take the list away.
+   --------------------------------------------------------------------------- */
+
+.row-edit summary {
+  list-style: none;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.row-edit summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-edit[open] summary {
+  color: var(--ink);
+  border-color: rgba(124, 92, 255, 0.5);
+  background: var(--accent-soft);
+}
+
+/* THE OPEN PANEL PUSHES THE LIST DOWN. IT DOES NOT FLOAT OVER IT.
+
+   It was `position: absolute` with a `right: 16px` and a z-index, which is what
+   a row editor hanging off a table needs. The topics list is not a table — it
+   is a column of <details>, one per topic — so the absolute panel left the
+   summary it belongs to sitting alone on its line, drew itself against the far
+   right of the nearest positioned ancestor, and covered the six topics under
+   it. Opening "America's Got Talent" hid "American Artists" through
+   "Bodycam", and clicking where one of those rows still appeared to be hit the
+   editor for a different topic.
+
+   In flow, it opens under its own summary and the rest of the list moves down —
+   which is what a <details> already does, and what the elevation and border
+   below are for: they say this block belongs to the row above it, not that it
+   is hovering above the page. */
+.row-edit-panel {
+  margin-top: 10px;
+  max-width: 780px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: rgba(16, 16, 32, 0.97);
+  box-shadow: var(--lift-lg);
+  padding: 22px;
+}
+
+/* --- motion --------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .nav-item,
+  .link,
+  tbody tr {
+    transition: none;
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* --- narrow --------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    border-right: none;
+    border-bottom: 1px solid var(--hairline-soft);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 12px 14px;
+    gap: 6px;
+  }
+
+  .mark {
+    padding: 0 12px 0 4px;
+  }
+
+  .mark span {
+    display: none;
+  }
+
+  .rail-foot {
+    margin-top: 0;
+    border-top: none;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .rail-foot form {
+    margin: 0 0 0 auto;
+  }
+
+  .rail-foot .btn {
+    width: auto;
+  }
+
+  .main {
+    padding: 24px 18px 60px;
+  }
+}

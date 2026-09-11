@@ -1,0 +1,61 @@
+{
+  "_fixture": "RECORDED. yt-dlp 2026.07.04, --flat-playlist -J --no-warnings --playlist-end 3, https://www.youtube.com/@MrBeast/shorts, 2026-09-04. Verbatim except: each entry keeps only its LARGEST thumbnail, the internal __x_forwarded_for_ip key is dropped, and the playlist-level description/tags/thumbnails are dropped. NOTHING about an entry has been added. This fixture exists to record what the /shorts TAB does NOT carry - there is no duration and no timestamp on any entry - which is why lib/platform/youtube.ts reads the uploads playlist instead.",
+  "id": "UCX6OQ3DkcsbYNE6H8uQQuVA",
+  "channel": "MrBeast",
+  "channel_id": "UCX6OQ3DkcsbYNE6H8uQQuVA",
+  "title": "MrBeast - Shorts",
+  "uploader_id": "@MrBeast",
+  "uploader_url": "https://www.youtube.com/@MrBeast",
+  "channel_url": "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA",
+  "playlist_count": null,
+  "_type": "playlist",
+  "extractor_key": "YoutubeTab",
+  "webpage_url": "https://www.youtube.com/@MrBeast/shorts",
+  "entries": [
+    {
+      "id": "5mU6SRS2Bxo",
+      "title": "World’s Largest Tennis Match",
+      "view_count": 9700000,
+      "url": "https://www.youtube.com/shorts/5mU6SRS2Bxo",
+      "ie_key": "Youtube",
+      "_type": "url",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/5mU6SRS2Bxo/sardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLBokMGhI__xNQ8FRk4ecscglKUTZg",
+          "height": 720,
+          "width": 405
+        }
+      ]
+    },
+    {
+      "id": "LiH-P4rSkLI",
+      "title": "Can You Pass This Classroom Quiz?",
+      "view_count": 45000000,
+      "url": "https://www.youtube.com/shorts/LiH-P4rSkLI",
+      "ie_key": "Youtube",
+      "_type": "url",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/LiH-P4rSkLI/sardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLCJPnHOTFocTbiewTasGR8MFP0jLw",
+          "height": 720,
+          "width": 405
+        }
+      ]
+    },
+    {
+      "id": "f7y2XikE7sY",
+      "title": "Paying For Food With My Car",
+      "view_count": 61000000,
+      "url": "https://www.youtube.com/shorts/f7y2XikE7sY",
+      "ie_key": "Youtube",
+      "_type": "url",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/f7y2XikE7sY/sardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLCp8UjStMlh4CetgblckoxE6491tw",
+          "height": 720,
+          "width": 405
+        }
+      ]
+    }
+  ]
+}

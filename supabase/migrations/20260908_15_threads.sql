@@ -1,0 +1,114 @@
+-- ============================================================================
+-- THREADS JOINS THE VOCABULARY
+-- ============================================================================
+--
+-- Erik, 2026-09-08: "We need to add threads."
+--
+-- Meta's Threads becomes the sixth platform. This migration adds two enum
+-- values and nothing else. That is the whole of it, and the smallness is the
+-- point — see the transaction note at the bottom for why nothing may be added
+-- to this file.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT THREADS CAN AND CANNOT DO, SO NOBODY HAS TO REDISCOVER IT
+-- ---------------------------------------------------------------------------
+--
+-- Threads is the FIRST Meta surface this tool can search for a subject. Its
+-- keyword search — GET https://graph.threads.net/v1.0/keyword_search — returns
+-- other people's PUBLIC posts, filtered by `media_type=VIDEO`, which is exactly
+-- the question migration 14 taught this tool to ask. Instagram and Facebook
+-- can only ever read accounts the operator already administers; Threads cannot
+-- read those at all and can read everyone else's. It is the opposite trade and
+-- it is a better one for a topic run.
+--
+-- What it will never do is MEASURE. Meta's insights endpoint
+-- (/{threads-media-id}/insights, the source of `views`) is documented to answer
+-- for the authenticated user's own media only. There is no view count for
+-- somebody else's post at any price, and there is no duration field anywhere in
+-- the Threads API — not on search results, not on insights, not on the media
+-- node.
+--
+-- So EVERY row this platform ever produces has `view_count` null and
+-- `duration_seconds` null. That is not a gap to be filled in later by a better
+-- adapter; it is the shape of the API. Those rows land in the run report's
+-- `unverified` list — the bucket added on 2026-09-04 for rows that failed no
+-- filter and satisfied none either — and they are shown to the operator as
+-- unmeasured rather than counted as Shorts over 500,000 views. A Threads row
+-- that ever appears in `shorts` is a bug: something invented a number.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT THIS MIGRATION DOES NOT HAVE TO DO
+-- ---------------------------------------------------------------------------
+--
+-- The FUNCTIONS pick the new value up on their own, because they iterate the
+-- enum at call time rather than listing its members:
+--
+--   * `refresh_auto_seeds` (migrations 11 and 13) loops
+--     `foreach p in array enum_range(...)`, so the sweep covers Threads.
+--   * `seed_from_short` (migration 13) has an `else null` arm, so Threads
+--     produces no auto-seeds rather than producing wrong ones. That is the
+--     correct answer today: Threads is searched by keyword, not by account,
+--     exactly like X, and X is the other platform that falls through that arm.
+--
+-- `platform_schedule` DOES NOT, and that is the trap in this file. Migration 07
+-- fills it with `insert ... select unnest(enum_range(...))` and its comment says
+-- "All five, always, from the enum itself so a sixth platform cannot be added to
+-- the vocabulary and quietly have no schedule row." That guarantee only holds
+-- for a database being built from scratch. On a deployment that already ran 07,
+-- the insert is history: it is a ROW SET that was computed once, not a view that
+-- re-reads the enum, so adding a value here leaves the table exactly as it was.
+-- Verified on the live database on 2026-09-08 — five rows, no threads.
+-- Migration 16 inserts it, which it can do because this file's value is
+-- committed by then. Do not "fix" 07 by editing it; it has already run.
+--
+-- The `shorts` table needed no change at all. Identity there is
+-- (platform, platform_video_id) with the id stored as the platform issues it
+-- and no shape constraint — the decision migration 01 argued for at length, and
+-- the reason a sixth platform costs two lines instead of a rewrite.
+--
+-- ---------------------------------------------------------------------------
+-- THE CREDENTIAL IS ITS OWN PROVIDER AND NOT `instagram`
+-- ---------------------------------------------------------------------------
+--
+-- A Threads token is issued by threads.net through its own OAuth, carries its
+-- own scopes (threads_basic, threads_keyword_search) and is presented to a
+-- different host. It is not a Facebook Page token and it is not an Instagram
+-- token, and filing it under either would mean an operator who pasted one
+-- would see Instagram claim to be configured while both platforms failed. The
+-- two enums stay separate for the reason migration 02 gives: a provider is who
+-- issues the key, and a platform is what gets read.
+--
+-- ---------------------------------------------------------------------------
+-- WHY THIS FILE ADDS VALUES AND DOES NOTHING WITH THEM
+-- ---------------------------------------------------------------------------
+--
+-- Postgres lets `alter type ... add value` run inside a transaction block since
+-- 12, but the new label CANNOT BE USED by the same transaction that added it —
+-- an insert naming 'threads', a function body comparing against it, a default
+-- referencing it, all fail with "unsafe use of new value of enum type".
+-- Supabase runs each migration file in one transaction, so any such statement
+-- added below would fail this migration at deploy time and not at review time.
+--
+-- That is why the `platform_schedule` row is migration 16 and not a third
+-- statement here: it names 'threads', and naming it in this transaction is the
+-- exact error above. Keep this file at two statements.
+-- ============================================================================
+
+-- Appended, which matches `PLATFORMS` in lib/platform/types.ts. That tuple has
+-- Threads last for the same reason, and tests/migrations.test.ts compares the
+-- two lists IN ORDER — two files that must be read together are not allowed to
+-- read differently.
+alter type shorts_scraper.platform add value if not exists 'threads';
+
+-- BEFORE 'scrapecreators', AND THE POSITION IS NOT COSMETIC.
+--
+-- `CREDENTIAL_PROVIDERS` is `[...PLATFORM_CREDENTIAL_PROVIDERS,
+-- ...VENDOR_CREDENTIAL_PROVIDERS]` — every platform, then every vendor — and it
+-- is the order /admin/credentials groups its slots by. A plain append would put
+-- the sixth PLATFORM after the vendor, so the enum would say
+-- (..., facebook, scrapecreators, threads) while the code says
+-- (..., facebook, threads, scrapecreators). tests/migrations.test.ts asserts
+-- these match in order and would have caught it; it is written correctly here
+-- so nobody has to find out from the failure what the rule was.
+alter type shorts_scraper.credential_provider
+  add value if not exists 'threads' before 'scrapecreators';

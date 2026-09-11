@@ -1,0 +1,13 @@
+{
+  "_fixture": "RECORDED. yt-dlp 2026.07.04, --flat-playlist -J --no-warnings --playlist-end 1, https://www.youtube.com/@MrBeast, 2026-09-01. Verbatim except that the entries array and thumbnails are dropped - this fixture exists to prove handle -> channel_id resolution, which is the only part of the response the resolver reads.",
+  "id": "@MrBeast",
+  "channel_id": "UCX6OQ3DkcsbYNE6H8uQQuVA",
+  "uploader_id": "@MrBeast",
+  "title": "MrBeast",
+  "channel": "MrBeast",
+  "channel_follower_count": 515000000,
+  "webpage_url": "https://www.youtube.com/@MrBeast",
+  "channel_url": "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA",
+  "description": "SUBSCRIBE FOR A COOKIE!\nNew MrBeast or MrBeast Gaming video every single Saturda [truncated in fixture]",
+  "_type": "playlist"
+}

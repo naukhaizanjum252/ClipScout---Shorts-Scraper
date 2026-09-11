@@ -1,0 +1,64 @@
+-- ============================================================================
+-- THREADS GETS ITS SCHEDULE ROW
+-- ============================================================================
+--
+-- The other half of migration 15, and it is a separate file because it has to
+-- be: 15 adds 'threads' to `shorts_scraper.platform`, and Postgres refuses to
+-- let the transaction that ADDED an enum label also USE it. This file runs in
+-- the next transaction, where the label is committed and ordinary.
+--
+-- ---------------------------------------------------------------------------
+-- WHY THIS IS NOT AUTOMATIC, WHICH IS THE PART WORTH WRITING DOWN
+-- ---------------------------------------------------------------------------
+--
+-- Migration 07 populates `platform_schedule` with
+--
+--     insert into shorts_scraper.platform_schedule (platform)
+--     select unnest(enum_range(null::shorts_scraper.platform))
+--     on conflict (platform) do nothing;
+--
+-- and its comment claims: "All five, always, from the enum itself so a sixth
+-- platform cannot be added to the vocabulary and quietly have no schedule row."
+--
+-- THAT CLAIM IS TRUE ONLY OF A DATABASE BUILT FROM SCRATCH. An `insert ...
+-- select` is evaluated once, when it runs. It is not a view and it does not
+-- re-read the enum afterwards, so on any deployment that already ran migration
+-- 07 — which is every deployment that exists — adding a value to the enum
+-- leaves this table untouched. The guarantee reads like a property of the
+-- schema and is actually a property of the initial build.
+--
+-- Confirmed rather than assumed: on the live database on 2026-09-08, straight
+-- after migration 15 applied cleanly, `platform_schedule` held exactly five
+-- rows — facebook, instagram, tiktok, x, youtube — and no threads.
+--
+-- The consequence of leaving it that way is quiet, which is why it is worth a
+-- migration of its own. `platform_schedule` is the cron's claim gate: a
+-- platform with no row cannot be claimed, so the scheduled run would simply
+-- never consider Threads and would never say why. Not an error, not an empty
+-- result — an absence, which is the failure mode this repo keeps writing
+-- paragraphs about.
+--
+-- MIGRATION 07 IS NOT EDITED TO FIX THIS. It has already run everywhere; a file
+-- that has run is history and rewriting it changes nothing about any live
+-- database while making the two disagree. The seventh platform will need a file
+-- like this one too.
+--
+-- ---------------------------------------------------------------------------
+-- IT ARRIVES DISABLED, LIKE EVERY OTHER PLATFORM
+-- ---------------------------------------------------------------------------
+--
+-- `enabled` defaults to false and is left there. Migration 07's reasoning
+-- applies unchanged — "a schedule that enabled itself on deploy would spend an
+-- operator's money on a decision nobody made" — and it applies with a little
+-- more force here: Threads is the platform whose results can never be measured,
+-- so an unattended run of it produces rows that are all unverified. Somebody
+-- should choose that deliberately on /admin/shorts.
+--
+-- `on conflict do nothing`, so re-running this file is safe and so is running
+-- it on a database built after Threads existed, where migration 07's insert
+-- already covered it.
+-- ============================================================================
+
+insert into shorts_scraper.platform_schedule (platform)
+values ('threads')
+on conflict (platform) do nothing;

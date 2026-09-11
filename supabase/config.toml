@@ -1,0 +1,88 @@
+# Supabase CLI configuration for shorts-scraper.
+#
+# THIS FILE EXISTS TO STOP THE CLI TARGETTING SOMEBODY ELSE'S DATABASE.
+#
+# The Supabase CLI resolves its working directory by walking UP from wherever it
+# is run until it finds a `supabase/` directory containing this file. Before
+# this file existed, running `supabase db push` from this repo printed
+#
+#     Using workdir C:\Users\ErikE
+#
+# and picked up the link stored in the home directory — which on this machine
+# points at the `Pilote` project. A migration push from here would have applied
+# shorts-scraper's schema to an unrelated database. Nothing in the repo would
+# have warned about it.
+#
+# ---------------------------------------------------------------------------
+# THE SHARED DATABASE, AND THE TWO CLI COMMANDS THAT ARE DANGEROUS IN ONE
+# ---------------------------------------------------------------------------
+#
+# Erik decided on 2026-09-02 (plan l35-shorts-scraper-2026-004, open question
+# Q4) that this tool lands in LookUp Media's own Supabase, in a database SHARED
+# with the account's other projects, because a Supabase project per tool costs
+# $10/month each. Everything this repo creates therefore lives in the
+# `shorts_scraper` schema and nothing lives in `public`.
+#
+# Two CLI commands do not respect that boundary, and both are project-wide:
+#
+#   supabase config push
+#       Pushes THIS FILE's settings to the remote project, replacing them.
+#       `[api] schemas` is deliberately OMITTED below for that reason: if it
+#       were listed here, one `config push` would reset the project's exposed
+#       schemas to this repo's list alone and every co-tenant app in the
+#       database would start returning PGRST106. DO NOT RUN IT against the
+#       shared project.
+#
+#   supabase db reset / supabase db pull --schema public
+#       Project-wide, not schema-scoped. `db reset` against a linked shared
+#       project destroys every co-tenant's data.
+#
+# Exposing this schema to PostgREST is therefore a DASHBOARD step, done once by
+# hand, additively:
+#
+#   Settings -> API -> Exposed schemas -> ADD `shorts_scraper` to whatever is
+#   already listed. Do not replace the list.
+#
+# `pnpm exec tsx verify/db.ts --check` reports the not-yet-exposed case by name
+# rather than as an opaque PGRST106.
+
+# ---------------------------------------------------------------------------
+# HOW MIGRATIONS GET APPLIED: BY HAND, IN THE SQL EDITOR. NOT `db push`.
+# ---------------------------------------------------------------------------
+#
+# Erik, 2026-09-02. Supabase keeps ONE migration history per DATABASE, in
+# `supabase_migrations.schema_migrations` — not one per schema and not one per
+# repo. With several tools sharing this project, every repo's `supabase db push`
+# would see the other repos' migrations as unknown remote entries and refuse or
+# reorder. There is no per-tenant migration history to give them.
+#
+# So the files in supabase/migrations/ are applied by pasting them into the
+# Supabase SQL editor, in filename order, one at a time, stopping at the first
+# error. That is what the client-side runbook instructs:
+#
+#   C:\LUCKY35\work-to-be-completed\shorts-scraper-SUPABASE-SETUP.md
+#
+# It is a deliberate choice, not a workaround for missing access. The filenames
+# stay in `YYYYMMDD_NN_name.sql` order because that order is the contract, and
+# `pnpm db:check` is what proves the result rather than a history table.
+
+project_id = "shorts-scraper"
+
+[api]
+enabled = true
+port = 54321
+# `schemas` is intentionally absent — see the warning about `config push` above.
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = false
+
+[auth]
+enabled = true
+
+[analytics]
+enabled = false

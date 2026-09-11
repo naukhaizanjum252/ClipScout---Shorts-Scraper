@@ -1,0 +1,5 @@
+# One line ending, everywhere. tests/migrations.test.ts strips `--` comments
+# out of the migrations before asserting over them, and a stray CR is a line
+# terminator in a JavaScript regex — which silently made that stripper a no-op
+# and let SQL prose satisfy a security assertion. Pin it rather than re-learn it.
+* text=auto eol=lf
