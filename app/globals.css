@@ -1693,6 +1693,20 @@ details.forecast-why > p {
   }
 }
 
+/* --- route loading fallback ----------------------------------------------- */
+/* Shown the instant a nav click starts, while the dynamic page renders on the
+   server (see _components/route-loading.tsx). Sits where the page content will,
+   so the swap when content arrives is not a jump. */
+.route-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 38px;
+  min-height: 320px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 /* --- run fact chips ------------------------------------------------------- */
 .run-facts {
   display: flex;
