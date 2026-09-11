@@ -14,11 +14,82 @@
  */
 import { useState, useTransition } from "react";
 
-import { PLATFORMS, platformLabel, type Platform } from "@/lib/platform/types";
+import { PLATFORMS, platformLabel, type Platform, type ShortRecord } from "@/lib/platform/types";
 import { shortKey } from "@/lib/shorts/store";
 
 import { ShortCard } from "../_components/short-card";
+import type { DownloadOutcome } from "../shorts/view";
 import type { LibraryFilter, LibraryRow, LibraryView, MarkResult, MarkUsedRequest } from "./view";
+
+/**
+ * Where a per-card "Get file" press has got to. Resolving a media URL is a
+ * live call — yt-dlp or a vendor — so the button owns a little state machine,
+ * the same three phases the run screen's MediaCell uses.
+ *
+ * A resolved URL is SHORT-LIVED and nothing is stored (a signed CDN address
+ * dies within hours), so "ready" is not cached across a reload — press again
+ * for a fresh one. YouTube is the sharp edge: its file link is signed to the
+ * address that resolved it, so a link resolved on this server 403s from a
+ * browser unless a yt-dlp service streams it (see resolveDownloadUrl). That is
+ * surfaced as the server's own refusal message rather than pretended around.
+ */
+type DownloadPhase =
+  | { readonly kind: "resolving" }
+  | { readonly kind: "ready"; readonly url: string }
+  | { readonly kind: "refused"; readonly message: string };
+
+/** An http(s) URL, or null — the resolved string came from outside this app. */
+function httpHref(raw: string): string | null {
+  return /^https?:\/\//i.test(raw) ? raw : null;
+}
+
+function DownloadButton({
+  short,
+  phase,
+  onResolve,
+}: {
+  readonly short: ShortRecord;
+  readonly phase: DownloadPhase | undefined;
+  readonly onResolve: (short: ShortRecord) => void;
+}) {
+  if (phase === undefined) {
+    return (
+      <button
+        type="button"
+        className="btn btn-quiet btn-small"
+        onClick={() => onResolve(short)}
+        aria-label={`Get the video file link for ${short.title ?? short.platform_video_id}`}
+      >
+        Get file
+      </button>
+    );
+  }
+  if (phase.kind === "resolving") {
+    return (
+      <button type="button" className="btn btn-quiet btn-small" disabled>
+        Resolving&#8230;
+      </button>
+    );
+  }
+  if (phase.kind === "refused") {
+    return (
+      <span className="faint" title={phase.message}>
+        no file
+      </span>
+    );
+  }
+  return (
+    <a
+      className="link btn-small"
+      href={phase.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      title="Direct file link — short-lived and nothing is stored. Press Get file again for a fresh one."
+    >
+      Download
+    </a>
+  );
+}
 
 const FILTERS: readonly { readonly id: LibraryFilter; readonly label: string }[] = [
   { id: "all", label: "All" },
@@ -56,16 +127,36 @@ function unverifiedFlag(unproven: readonly string[] | null) {
 export function LibraryPanel({
   view,
   onSetUsed,
+  onResolveDownload,
 }: {
   readonly view: LibraryView;
   readonly onSetUsed: (request: MarkUsedRequest) => Promise<MarkResult>;
+  readonly onResolveDownload: (short: ShortRecord) => Promise<DownloadOutcome>;
 }) {
   const [filter, setFilter] = useState<LibraryFilter>("all");
   const [platform, setPlatform] = useState<PlatformFilter>("all");
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const [downloads, setDownloads] = useState<Record<string, DownloadPhase>>({});
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  function resolveDownload(short: ShortRecord) {
+    const key = shortKey(short);
+    if (downloads[key]?.kind === "resolving") return;
+    setDownloads((current) => ({ ...current, [key]: { kind: "resolving" } }));
+    startTransition(async () => {
+      const outcome = await onResolveDownload(short).catch(
+        (): DownloadOutcome => ({ ok: false, message: "The file link could not be resolved." }),
+      );
+      const phase: DownloadPhase = !outcome.ok
+        ? { kind: "refused", message: outcome.message }
+        : httpHref(outcome.url) === null
+          ? { kind: "refused", message: "The resolved link was not a usable web address." }
+          : { kind: "ready", url: outcome.url };
+      setDownloads((current) => ({ ...current, [key]: phase }));
+    });
+  }
 
   if (view.unavailable) {
     return (
@@ -237,6 +328,11 @@ export function LibraryPanel({
                 flag={unverifiedFlag(row.unproven)}
                 footer={
                   <div className="lib-used">
+                    <DownloadButton
+                      short={row.short}
+                      phase={downloads[key]}
+                      onResolve={resolveDownload}
+                    />
                     {used ? (
                       <span className="state state-ok">
                         <span className="state-mark" aria-hidden="true" /> used

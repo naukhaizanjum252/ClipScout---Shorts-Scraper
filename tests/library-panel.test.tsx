@@ -55,6 +55,7 @@ function view(rows: readonly LibraryRow[]): LibraryView {
 }
 
 const noop = async () => ({ ok: true }) as const;
+const noResolve = async () => ({ ok: false, message: "not resolved in this test" }) as const;
 
 const tab = (name: RegExp) => screen.getByRole("tab", { name });
 
@@ -66,7 +67,7 @@ describe("the library platform filter", () => {
   ];
 
   it("offers a chip per platform that has saved shorts, with a count", () => {
-    render(<LibraryPanel view={view(rows)} onSetUsed={noop} />);
+    render(<LibraryPanel view={view(rows)} onSetUsed={noop} onResolveDownload={noResolve} />);
 
     expect(tab(/all platforms/i)).toBeTruthy();
     expect(tab(/youtube/i).textContent).toContain("2");
@@ -75,7 +76,7 @@ describe("the library platform filter", () => {
 
   it("narrows the list to one platform when its chip is picked", async () => {
     const user = userEvent.setup();
-    render(<LibraryPanel view={view(rows)} onSetUsed={noop} />);
+    render(<LibraryPanel view={view(rows)} onSetUsed={noop} onResolveDownload={noResolve} />);
 
     await user.click(tab(/instagram/i));
 
@@ -88,7 +89,7 @@ describe("the library platform filter", () => {
     render(
       <LibraryPanel
         view={view([row("youtube", "y1", "Only YouTube here")])}
-        onSetUsed={noop}
+        onSetUsed={noop} onResolveDownload={noResolve}
       />,
     );
 
@@ -104,7 +105,7 @@ describe("the library platform filter", () => {
           row("youtube", "y1", "A measured YouTube short"),
           row("instagram", "i1", "An Instagram reel with no duration", false, ["duration"]),
         ])}
-        onSetUsed={noop}
+        onSetUsed={noop} onResolveDownload={noResolve}
       />,
     );
 
@@ -117,6 +118,33 @@ describe("the library platform filter", () => {
     expect(within(measured as HTMLElement).queryByText(/unmeasured/i)).toBeNull();
   });
 
+  it("resolves a per-card file link on demand, and shows a refusal instead of a dead link", async () => {
+    const user = userEvent.setup();
+    render(
+      <LibraryPanel
+        view={view([row("instagram", "i1", "A reel")])}
+        onSetUsed={noop}
+        onResolveDownload={async () => ({ ok: true, url: "https://cdn.test/clip.mp4" })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /video file link/i }));
+    const link = await screen.findByRole("link", { name: /download/i });
+    expect(link.getAttribute("href")).toBe("https://cdn.test/clip.mp4");
+
+    // A refusal (e.g. YouTube's IP-bound link) shows as "no file", never a broken link.
+    cleanup();
+    render(
+      <LibraryPanel
+        view={view([row("youtube", "y1", "A yt short")])}
+        onSetUsed={noop}
+        onResolveDownload={async () => ({ ok: false, message: "blocked from this address" })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /video file link/i }));
+    expect(await screen.findByText(/no file/i)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /download/i })).toBeNull();
+  });
+
   it("combines the platform filter with used/unused", async () => {
     const user = userEvent.setup();
     render(
@@ -126,7 +154,7 @@ describe("the library platform filter", () => {
           row("youtube", "y2", "Used YouTube", true),
           row("instagram", "i1", "Unused Instagram"),
         ])}
-        onSetUsed={noop}
+        onSetUsed={noop} onResolveDownload={noResolve}
       />,
     );
 

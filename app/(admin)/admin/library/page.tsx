@@ -15,6 +15,7 @@ import { SupabaseUsedShortsStore } from "@/lib/shorts/used-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
+import { resolveDownloadUrl } from "../shorts/actions";
 import { setUsed } from "./actions";
 import { LibraryPanel } from "./library-panel";
 import type { LibraryRow, LibraryView } from "./view";
@@ -99,5 +100,5 @@ async function loadLibrary(): Promise<LibraryView> {
 
 export default async function LibraryPage() {
   const view = await loadLibrary();
-  return <LibraryPanel view={view} onSetUsed={setUsed} />;
+  return <LibraryPanel view={view} onSetUsed={setUsed} onResolveDownload={resolveDownloadUrl} />;
 }
