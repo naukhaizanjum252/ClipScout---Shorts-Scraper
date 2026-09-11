@@ -88,7 +88,29 @@ export default async function TopicsPage() {
  * finding out of a local fault. The same rule the run applies to an empty
  * result.
  */
+const REACH_TTL_MS = 60_000;
+let reachCache: { at: number; value: PlatformReach[] } | null = null;
+
+/**
+ * The reachability answer, memoised in-process.
+ *
+ * `computeReachOfEachPlatform` builds every adapter and probes each one —
+ * credential leases, and a `yt-dlp` spawn for YouTube — which is the bulk of
+ * this page's render time (~2.3s measured 2026-09-12). That answer is the same
+ * for minutes at a time: it changes only when a credential or the config does,
+ * never per request. So it is cached in the pm2 process with a short TTL — one
+ * probe a minute, every visit in between instant — and cleared on restart. This
+ * is an advisory readout, so a value up to a minute stale is fine; it must only
+ * never be a stale CORRECTNESS claim, and reachability is not one.
+ */
 async function reachOfEachPlatform(): Promise<PlatformReach[]> {
+  if (reachCache && Date.now() - reachCache.at < REACH_TTL_MS) return reachCache.value;
+  const value = await computeReachOfEachPlatform();
+  reachCache = { at: Date.now(), value };
+  return value;
+}
+
+async function computeReachOfEachPlatform(): Promise<PlatformReach[]> {
   let built: Awaited<ReturnType<typeof buildAdapters>>;
   try {
     const [{ store: credentials }, { store: seedStore }] = await Promise.all([

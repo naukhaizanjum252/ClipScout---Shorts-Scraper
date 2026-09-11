@@ -197,6 +197,17 @@ a {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* PINNED TO THE VIEWPORT, so the rail — and the credits chip at its foot —
+     stay in view on a long page. Without this the rail is a grid cell that
+     stretches to the full page height, and `.nav-credits` (margin-top:auto)
+     ends up at the bottom of the whole scroll, only seen after scrolling down.
+     `align-self:start` stops the grid stretching it; `overflow-y:auto` lets the
+     rail scroll internally if it is ever taller than the screen. */
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .mark {
@@ -2101,6 +2112,18 @@ a.short-title:hover {
     align-items: center;
     padding: 12px 14px;
     gap: 6px;
+    /* Back to a normal top bar on narrow screens — undo the desktop pin. */
+    position: static;
+    height: auto;
+    overflow-y: visible;
+  }
+
+  /* The credits chip flows inline in the top bar rather than being pushed to a
+     100vh bottom that no longer exists. */
+  .nav-credits {
+    margin-top: 0;
+    border-top: none;
+    padding: 4px 10px;
   }
 
   .mark {
