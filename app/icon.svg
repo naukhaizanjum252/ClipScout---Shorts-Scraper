@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#7c5cff"/>
+  <!-- magnifier lens = "scout" -->
+  <circle cx="14" cy="14" r="6.5" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+  <!-- play triangle inside the lens = "clip" -->
+  <path d="M12 11.2 L17 14 L12 16.8 Z" fill="#ffffff"/>
+  <!-- handle -->
+  <line x1="19" y1="19" x2="24" y2="24" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+</svg>
