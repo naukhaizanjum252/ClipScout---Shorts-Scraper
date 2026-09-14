@@ -251,6 +251,7 @@ describe("the schema is the shorts product and nothing else", () => {
       "runs",
       "seed_proposals",
       "shorts",
+      "topic_channels",
       "topics",
       "unverified_shorts",
       "used_shorts",
@@ -1279,6 +1280,10 @@ describe("every operation the app performs has the grant, and the policy, to all
     // same route `lib/shorts/seeds.ts` takes, and for the same reason: a run
     // has to read the topic list with no session in scope.
     "lib/shorts/topic-store.ts": "service",
+    // Per-topic channels (migration 19). Reached through
+    // `resolveTopicChannelStore`'s admin client — service_role, like seeds — so
+    // migration 19's grants to that role are the whole of the enforcement.
+    "lib/shorts/topic-channels.ts": "service",
     // The used/unused marks. /admin/library and its action both reach it through
     // `createSupabaseAdminClient`, so it runs as service_role like the rest —
     // migration 17 grants select/insert/delete to that role and, RLS being
