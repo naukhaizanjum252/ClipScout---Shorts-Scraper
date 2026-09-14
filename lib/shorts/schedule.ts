@@ -126,6 +126,8 @@ import {
   type SeedStore,
 } from "./seeds";
 import { activeTopics, TopicsNotInstalledError, type TopicStore } from "./topic-store";
+import { channelMapForTopics, type TopicChannelStore } from "./topic-channels";
+import { growTopicChannels } from "./grow-channels";
 import type { Topic } from "./topics";
 import type { ShortsStore } from "./store";
 
@@ -792,6 +794,13 @@ export interface ScheduledRunOptions {
    * deployment stopped wanting on 2026-09-05.
    */
   readonly topics?: TopicStore;
+  /**
+   * A TOPIC'S OWN CHANNELS, searched alongside its keywords and grown from what
+   * performs. Optional and tolerant: absent (or a store without migration 19)
+   * makes the keyword-only scheduled run every caller made before this existed.
+   * See lib/shorts/topic-channels.ts and lib/shorts/grow-channels.ts.
+   */
+  readonly channels?: TopicChannelStore;
   readonly store: ShortsStore;
   readonly limit: number;
   readonly minViews: number;
@@ -987,17 +996,32 @@ export async function runOnSchedule(options: ScheduledRunOptions): Promise<Sched
   let runReport: LatestShortsReport | null = null;
   let runError: string | null = null;
   try {
+    // Read INSIDE the try, so a store that throws is caught by the same handler
+    // that catches a structural run failure and every lock below is still
+    // released. See the option's comment for why an unread topic list stops the
+    // pass rather than falling back to an untargeted read.
+    const scheduledTopics = await topicsFor(options.topics);
+    // Channels are TOLERANT, unlike topics: no table / no channels is a
+    // keyword-only run, not a refusal, so a read failure here is swallowed.
+    let topicChannels: Awaited<ReturnType<typeof channelMapForTopics>> | undefined;
+    if (options.channels) {
+      try {
+        topicChannels = await channelMapForTopics(
+          options.channels,
+          scheduledTopics.map((t) => t.slug),
+        );
+      } catch (cause) {
+        console.error("[schedule] topic channels could not be read; keywords only:", cause);
+      }
+    }
     runReport = await getLatestShorts({
       adapters,
       store: options.store,
       limit: options.limit,
       minViews: options.minViews,
       maxDurationSeconds: options.maxDurationSeconds,
-      // Read INSIDE the try, so a store that throws is caught by the same
-      // handler that catches a structural run failure and every lock below is
-      // still released. See the option's comment for why this stops the pass
-      // rather than falling back to an untargeted read.
-      topics: await topicsFor(options.topics),
+      topics: scheduledTopics,
+      ...(topicChannels ? { topicChannels } : {}),
     });
   } catch (cause) {
     // Structural only — two adapters claiming one platform, say. A per-platform
@@ -1066,6 +1090,19 @@ export async function runOnSchedule(options: ScheduledRunOptions): Promise<Sched
       note: noteFor(outcome),
     });
     wasRead.set(platform, { platform, status: "ran", outcome, lockReleased });
+  }
+
+  // THE SELF-GROW, best-effort, after the run. Adopt the creators that performed
+  // for each topic into its channel list so the next pass reads them directly.
+  // Guarded like `fileProposals`: a failure here must not undo a pass that ran.
+  // Unverified rows are included — Instagram's performers usually live there.
+  if (options.channels && runReport && !options.channels.readOnlyReason) {
+    try {
+      const candidates = [...runReport.shorts, ...(runReport.unverified ?? []).map((u) => u.short)];
+      await growTopicChannels({ store: options.channels, shorts: candidates });
+    } catch (cause) {
+      console.error("[schedule] topic channels could not be grown:", cause);
+    }
   }
 
   return {

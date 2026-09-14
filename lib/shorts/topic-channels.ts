@@ -81,6 +81,32 @@ export function activeChannelsByPlatform(
   return out;
 }
 
+/**
+ * The run's channel map — `slug -> platform -> active channels` — for a set of
+ * topic slugs. One read, grouped for only the topics being searched, folded to
+ * the shape `run` consumes. The caller wraps this in a try/catch: a deployment
+ * without migration 19 has no table, and a keyword-only run is the right
+ * fallback, not a crash.
+ */
+export async function channelMapForTopics(
+  store: TopicChannelStore,
+  slugs: Iterable<string>,
+): Promise<Map<string, Partial<Record<Platform, readonly string[]>>>> {
+  const wanted = new Set(slugs);
+  const map = new Map<string, Partial<Record<Platform, readonly string[]>>>();
+  if (wanted.size === 0) return map;
+
+  const bySlug = new Map<string, TopicChannel[]>();
+  for (const row of await store.listChannels()) {
+    if (!wanted.has(row.topic_slug)) continue;
+    const list = bySlug.get(row.topic_slug) ?? [];
+    list.push(row);
+    bySlug.set(row.topic_slug, list);
+  }
+  for (const [slug, rows] of bySlug) map.set(slug, activeChannelsByPlatform(rows));
+  return map;
+}
+
 // ---------------------------------------------------------------------------
 // The port
 // ---------------------------------------------------------------------------

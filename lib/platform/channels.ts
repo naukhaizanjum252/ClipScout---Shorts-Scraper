@@ -55,3 +55,31 @@ export function asChannelReader(adapter: PlatformAdapter): ChannelReadingAdapter
   if (typeof candidate.latestShortsForChannels !== "function") return null;
   return adapter as ChannelReadingAdapter;
 }
+
+/**
+ * The identifier a later run could enumerate this short's creator by, or null
+ * when this platform's run rows do not carry one. The per-platform fact the
+ * self-grow loop (lib/shorts/grow-channels.ts) ranks on — kept HERE, behind the
+ * platform seam, because "how do I address this creator again" is exactly the
+ * kind of per-platform knowledge lib/platform/types.ts says must not leak into
+ * the rest of the tree.
+ *
+ * YouTube: the `UC…` channel id (`creator_id`), or an `@handle` if that is all a
+ * row carries. Instagram: the `@handle` (`creator_handle`). Everything else:
+ * null — TikTok's enumerable id is a `sec_uid`, which a flat-playlist row does
+ * not expose, and X/Facebook cannot be enumerated by creator at all.
+ */
+export function enumerableChannel(short: ShortRecord): string | null {
+  if (short.platform === "youtube") {
+    const id = short.creator_id?.trim();
+    if (id && /^UC[0-9A-Za-z_-]{20,}$/.test(id)) return id;
+    const handle = short.creator_handle?.trim();
+    if (handle && handle.startsWith("@")) return handle;
+    return null;
+  }
+  if (short.platform === "instagram") {
+    const handle = short.creator_handle?.trim();
+    return handle ? handle : null;
+  }
+  return null;
+}

@@ -162,6 +162,7 @@ import {
 } from "@/lib/shorts/schedule";
 import { SupabaseSeedStore } from "@/lib/shorts/seeds";
 import { SupabaseTopicStore } from "@/lib/shorts/topic-store";
+import { SupabaseTopicChannelStore } from "@/lib/shorts/topic-channels";
 import { SupabaseShortsStore } from "@/lib/shorts/supabase-store";
 import {
   DB_SCHEMA,
@@ -284,6 +285,10 @@ async function handle(request: Request): Promise<Response> {
       // results and the manual ones would answer different questions while
       // looking identical on the page.
       topics: new SupabaseTopicStore(client),
+      // Each topic's own channels — searched alongside its keywords, and grown
+      // from what performs, so the unattended pass keeps the lists current
+      // between manual runs. Tolerant of migration 19 being unapplied.
+      channels: new SupabaseTopicChannelStore(client),
       store: new SupabaseShortsStore(client),
       limit: ROWS_PER_PLATFORM,
       minViews: minViews(),

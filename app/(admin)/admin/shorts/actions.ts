@@ -19,7 +19,8 @@ import {
   safeToShowMessage,
 } from "@/lib/shorts/run";
 import { resolveSeedStore } from "@/lib/shorts/seeds";
-import { activeChannelsByPlatform, resolveTopicChannelStore } from "@/lib/shorts/topic-channels";
+import { channelMapForTopics, resolveTopicChannelStore } from "@/lib/shorts/topic-channels";
+import { growTopicChannels } from "@/lib/shorts/grow-channels";
 import { activeTopics, resolveTopicStore, TopicsNotInstalledError } from "@/lib/shorts/topic-store";
 import { topicRef, type Topic, type TopicRef } from "@/lib/shorts/topics";
 import { ShortsStoreError, type ShortsStore } from "@/lib/shorts/store";
@@ -720,23 +721,14 @@ async function resolveStore(): Promise<ShortsStore> {
 async function topicChannelsForRun(
   topics: readonly Topic[],
 ): Promise<ReadonlyMap<string, Partial<Record<Platform, readonly string[]>>>> {
-  const map = new Map<string, Partial<Record<Platform, readonly string[]>>>();
-  if (topics.length === 0) return map;
+  if (topics.length === 0) return new Map();
   try {
     const { store } = await resolveTopicChannelStore();
-    const wanted = new Set(topics.map((t) => t.slug));
-    const bySlug = new Map<string, Awaited<ReturnType<typeof store.listChannels>>>();
-    for (const row of await store.listChannels()) {
-      if (!wanted.has(row.topic_slug)) continue;
-      const list = bySlug.get(row.topic_slug) ?? [];
-      list.push(row);
-      bySlug.set(row.topic_slug, list);
-    }
-    for (const [slug, rows] of bySlug) map.set(slug, activeChannelsByPlatform(rows));
+    return await channelMapForTopics(store, topics.map((t) => t.slug));
   } catch (cause) {
     console.error(`${LOG_TAG} topic channels could not be read; running keywords only:`, cause);
+    return new Map();
   }
-  return map;
 }
 
 /**
@@ -841,6 +833,27 @@ export async function getLatestShorts(request: RunRequest): Promise<RunOutcome> 
     // would land for a local `next dev` and silently not for the deployment,
     // which is the worst place for the difference to live.
     await keepRun(report);
+
+    // THE SELF-GROW, AFTER THE RUN AND NEVER INSTEAD OF IT. Adopt the creators
+    // that performed for each topic into its channel list, so the next run reads
+    // them directly. Best-effort like `keepRun`: it cannot throw here (its own
+    // adds are guarded) and its failure must not withhold a list already paid
+    // for. Unverified rows are included because Instagram's performers usually
+    // live there (no duration), and skipping them would starve Instagram growth.
+    if (topicChannels !== undefined || subjects.topics.length > 0) {
+      try {
+        const { store } = await resolveTopicChannelStore();
+        if (!store.readOnlyReason) {
+          const candidates = [
+            ...report.shorts,
+            ...(report.unverified ?? []).map((u) => u.short),
+          ];
+          await growTopicChannels({ store, shorts: candidates });
+        }
+      } catch (cause) {
+        console.error(`${LOG_TAG} topic channels could not be grown after the run:`, cause);
+      }
+    }
 
     return { ok: true, report };
   } catch (cause) {
