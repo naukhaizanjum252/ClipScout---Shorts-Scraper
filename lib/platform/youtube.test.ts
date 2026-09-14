@@ -16,6 +16,7 @@ import type { LatestShortsQuery } from "./adapter";
 import { PlatformUnavailableError } from "./unavailable";
 import { YouTubeAdapter, channelUrl } from "./youtube";
 import { YtDlpError, type YtDlpRunner } from "./ytdlp";
+import { asChannelReader } from "./channels";
 
 const QUERY: LatestShortsQuery = { limit: 50, minViews: 500_000, minDurationSeconds: 0, maxDurationSeconds: 120 };
 const NOW = () => new Date("2026-09-04T12:00:00.000Z");
@@ -345,5 +346,33 @@ describe("channelUrl", () => {
     expect(channelUrl(CHANNEL)).toBe(`https://www.youtube.com/channel/${CHANNEL}`);
     expect(channelUrl("MrBeast")).toBe("https://www.youtube.com/@MrBeast");
     expect(channelUrl("@MrBeast")).toBe("https://www.youtube.com/@MrBeast");
+  });
+});
+
+describe("latestShortsForChannels (a topic's own channels)", () => {
+  it("enumerates the channels it is given, not this adapter's seeds", async () => {
+    const { run, calls } = workingRunner();
+    // Seeded with NOTHING; the channels are passed explicitly, as a topic run does.
+    const adapter = new YouTubeAdapter({ seeds: [], run, now: NOW });
+    const shorts = await adapter.latestShortsForChannels([CHANNEL], QUERY);
+
+    expect(shorts.length).toBeGreaterThan(0);
+    const read = calls.flat().find((a) => a.startsWith("https://www.youtube.com/playlist"));
+    expect(read).toBe(`https://www.youtube.com/playlist?list=UU${CHANNEL.slice(2)}`);
+  });
+
+  it("returns [] for a list with nothing addressable, and reads nothing at all", async () => {
+    const { run, calls } = workingRunner();
+    const shorts = await new YouTubeAdapter({ seeds: [], run, now: NOW }).latestShortsForChannels(
+      ["not a channel!!"],
+      QUERY,
+    );
+    expect(shorts).toEqual([]);
+    // Not even a --version probe: an empty usable list is decided before any spawn.
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is exposed through the ChannelReadingAdapter capability", () => {
+    expect(asChannelReader(new YouTubeAdapter({ seeds: [], run: workingRunner().run }))).not.toBeNull();
   });
 });

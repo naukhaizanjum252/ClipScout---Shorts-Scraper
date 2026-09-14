@@ -20,10 +20,16 @@
 import { revalidatePath } from "next/cache";
 
 import { getViewer, isAdmin } from "@/lib/auth/role";
+import { platformLabel } from "@/lib/platform/types";
 import { resolveTopicStore, TopicStoreError, type TopicStore } from "@/lib/shorts/topic-store";
+import {
+  resolveTopicChannelStore,
+  TopicChannelStoreError,
+  type TopicChannelStore,
+} from "@/lib/shorts/topic-channels";
 import { cleanTerms } from "@/lib/shorts/topics";
 
-import { FIELD, textToTerms, type TopicActionResult } from "./view";
+import { CHANNEL_FIELD, FIELD, isChannelPlatform, textToTerms, type TopicActionResult } from "./view";
 
 const TOPICS_PATH = "/admin/topics";
 const LOG_TAG = "[admin/topics]";
@@ -103,6 +109,93 @@ export async function restorePlanTopics(): Promise<TopicActionResult> {
       `${written.map((t) => t.name).join(", ")}. Anything already here was left untouched.`
     );
   });
+}
+
+/**
+ * Attach a channel to a topic. The identity check (blank, platform in scope) is
+ * here because the action id — not the browser — is what posts, and can carry
+ * anything. The store makes a re-add of a switched-off channel reactivate it.
+ */
+export async function addTopicChannel(form: FormData): Promise<TopicActionResult> {
+  return await writeChannels(async (store) => {
+    const topicSlug = String(form.get(CHANNEL_FIELD.topicSlug) ?? "").trim();
+    const platform = String(form.get(CHANNEL_FIELD.platform) ?? "");
+    const channel = String(form.get(CHANNEL_FIELD.channel) ?? "").trim();
+    if (!topicSlug) throw new TopicChannelStoreError("A topic is required.");
+    if (!isChannelPlatform(platform)) {
+      throw new TopicChannelStoreError("Channels can only be added on YouTube, Instagram or TikTok.");
+    }
+    if (!channel) throw new TopicChannelStoreError("A channel is required.");
+    await store.addChannel({ topicSlug, platform, channel, source: "manual" });
+    return `Added ${channel} on ${platformLabel(platform)}. It will be searched with this topic.`;
+  });
+}
+
+/** Switch a topic's channel on or off. Off is a deactivation, not a delete. */
+export async function setTopicChannelActive(form: FormData): Promise<TopicActionResult> {
+  return await writeChannels(async (store) => {
+    const topicSlug = String(form.get(CHANNEL_FIELD.topicSlug) ?? "").trim();
+    const platform = String(form.get(CHANNEL_FIELD.platform) ?? "");
+    const channel = String(form.get(CHANNEL_FIELD.channel) ?? "").trim();
+    const active = String(form.get(CHANNEL_FIELD.active) ?? "") === "true";
+    if (!isChannelPlatform(platform)) throw new TopicChannelStoreError("That is not a channel this tool searches.");
+    await store.setChannelActive(topicSlug, platform, channel, active);
+    return active
+      ? `${channel} is on and will be searched with this topic.`
+      : `${channel} is off. It is kept, not deleted — it just stops being searched.`;
+  });
+}
+
+/** Remove a topic's channel outright — for a mistake, not for retiring a dud. */
+export async function removeTopicChannel(form: FormData): Promise<TopicActionResult> {
+  return await writeChannels(async (store) => {
+    const topicSlug = String(form.get(CHANNEL_FIELD.topicSlug) ?? "").trim();
+    const platform = String(form.get(CHANNEL_FIELD.platform) ?? "");
+    const channel = String(form.get(CHANNEL_FIELD.channel) ?? "").trim();
+    if (!isChannelPlatform(platform)) throw new TopicChannelStoreError("That is not a channel this tool searches.");
+    await store.removeChannel(topicSlug, platform, channel);
+    return `Removed ${channel} from this topic.`;
+  });
+}
+
+/** The channel-store twin of `write` below. Same role gate, same failure rules. */
+async function writeChannels(
+  action: (store: TopicChannelStore) => Promise<string>,
+): Promise<TopicActionResult> {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) {
+    return { ok: false, message: "Only an admin can change a topic's channels." };
+  }
+
+  let store: TopicChannelStore;
+  try {
+    store = (await resolveTopicChannelStore()).store;
+  } catch (cause) {
+    console.error(`${LOG_TAG} the topic-channel store could not be opened:`, cause);
+    return {
+      ok: false,
+      message:
+        "The channel list could not be opened, so nothing was changed. The reason is in the " +
+        "server log, tagged [admin/topics].",
+    };
+  }
+
+  if (store.readOnlyReason) return { ok: false, message: store.readOnlyReason };
+
+  try {
+    const message = await action(store);
+    revalidatePath(TOPICS_PATH);
+    return { ok: true, message };
+  } catch (cause) {
+    if (cause instanceof TopicChannelStoreError) return { ok: false, message: cause.message };
+    console.error(`${LOG_TAG} a topic channel could not be written:`, cause);
+    return {
+      ok: false,
+      message:
+        "That could not be saved, and nothing was changed. The reason is in the server log, " +
+        "tagged [admin/topics].",
+    };
+  }
 }
 
 /**

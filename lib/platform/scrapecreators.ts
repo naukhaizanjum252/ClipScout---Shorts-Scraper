@@ -131,7 +131,7 @@
 import type { LatestShortsQuery } from "./adapter";
 import type { CaveatedShortRecord } from "./caveat";
 import type { Platform, ShortRecord } from "./types";
-import { SEARCHES_KEYWORDS, type KeywordSearchingProvider } from "./unavailable";
+import { ENUMERATES_CREATORS, SEARCHES_KEYWORDS, type KeywordSearchingProvider } from "./unavailable";
 import { scrub } from "../credentials/mask";
 import {
   markSafeToShow,
@@ -1397,7 +1397,16 @@ export class ScrapeCreatorsProvider implements KeywordSearchingProvider {
     this.client = options.client;
     this.sources = options.sources;
     for (const source of this.sources) assertUsableSource(this.platform, source);
+    // CREATOR ENUMERATION IS INSTAGRAM-ONLY through this vendor — only its
+    // /v1/instagram/user/reels carries a play count. So the capability marker is
+    // set only on an Instagram provider; `asCreatorEnumerating` then returns null
+    // for the TikTok and Facebook instances, whose creators this vendor cannot
+    // read (TikTok is enumerated by sec_uid through yt-dlp instead).
+    if (this.platform === "instagram") this[ENUMERATES_CREATORS] = true;
   }
+
+  /** Set to true only for the Instagram instance — see the constructor. */
+  readonly [ENUMERATES_CREATORS]?: true;
 
   /**
    * Every seeded source, read, mapped and concatenated. NEVER [] TO MEAN BROKEN.
@@ -1556,6 +1565,70 @@ export class ScrapeCreatorsProvider implements KeywordSearchingProvider {
    * being searched in and charging a credit for the answer — the same rule
    * `VENDOR_SOURCES` in lib/platform/registry.ts already refuses to break.
    */
+  /**
+   * The latest shorts of these specific creators — a topic's own channels,
+   * enumerated on THIS provider so it is one client, one meter, one budget.
+   *
+   * INSTAGRAM ONLY, a fact about the vendor rather than a limit here:
+   * `/v1/instagram/user/reels` is the only creator-enumeration endpoint
+   * ScrapeCreators sells that carries a play count. TikTok creators are read by
+   * sec_uid through yt-dlp in `TikTokAdapter`, and Facebook has no creator
+   * search — so a caller reaching this for another platform is a routing bug,
+   * named rather than answered with an empty list. Built and read exactly like
+   * `latestShortsForKeywords` (one source per handle, the same `readSource`, the
+   * same budget guard) so a channel run and a keyword run share one receipt.
+   */
+  async latestShortsForCreators(
+    handles: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
+    if (this.platform !== "instagram") {
+      throw new ScrapeCreatorsSourceError(
+        `Only Instagram enumerates a creator through ScrapeCreators; ${this.platform} does not. ` +
+          "TikTok creators are read by sec_uid through yt-dlp, and Facebook has no creator search.",
+      );
+    }
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1) {
+      throw new ScrapeCreatorsSourceError(
+        `limit must be a positive integer, got ${String(query.limit)}. Nothing was sent.`,
+      );
+    }
+
+    const sources: PlatformSource[] = handles
+      .map((h) => h.trim().replace(/^@/, ""))
+      .filter(Boolean)
+      .map((handle) => ({ kind: "creator", handle }) satisfies InstagramSource);
+    // No addressable handles is not a failure — the topic named none this
+    // adapter can read. Empty, not a throw (contrast the configured path, where
+    // zero sources is a misconfiguration).
+    if (sources.length === 0) return [];
+
+    const discoveredAt = this.client.now().toISOString();
+    const out: ShortRecord[] = [];
+    for (const source of sources) {
+      if (out.length >= query.limit) break;
+      try {
+        out.push(...(await this.readSource(source, query.limit - out.length, discoveredAt)));
+      } catch (cause) {
+        // Same rule as the other read paths: a spend cap reached with rows
+        // already paid for keeps them and reports a truncation. See `latestShorts`.
+        if (cause instanceof ScrapeCreatorsRequestCapError && out.length > 0) {
+          this.client.reportTruncation({
+            cause: "spend-cap",
+            message:
+              `Stopped before reading every channel: the ceiling of ` +
+              `${this.client.maxRequests} ScrapeCreators requests was reached. ` +
+              `${out.length} row${out.length === 1 ? "" : "s"} had already been read and are kept — ` +
+              "they were paid for. Raise `maxRequests` to read the rest.",
+          });
+          break;
+        }
+        throw cause;
+      }
+    }
+    return out;
+  }
+
   private keywordSources(keywords: readonly string[]): PlatformSource[] {
     const phrases = keywords.map((k) => k.trim()).filter(Boolean);
     if (phrases.length === 0) {

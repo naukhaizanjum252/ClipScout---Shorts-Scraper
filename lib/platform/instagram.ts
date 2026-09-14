@@ -145,6 +145,8 @@ import {
   READS_TOPICS,
   type TopicalAdapter,
 } from "./topical";
+import { READS_CHANNELS, type ChannelReadingAdapter } from "./channels";
+import { asCreatorEnumerating } from "./unavailable";
 import type { Topic } from "../shorts/topics";
 import { PlatformUnavailableError, ProviderBackedAdapter, type ProviderClient } from "./unavailable";
 
@@ -269,7 +271,7 @@ export interface InstagramAdapterOptions {
   readonly timeoutMs?: number;
 }
 
-export class InstagramAdapter extends ProviderBackedAdapter implements TopicalAdapter {
+export class InstagramAdapter extends ProviderBackedAdapter implements TopicalAdapter, ChannelReadingAdapter {
   readonly platform: Platform = PLATFORM;
 
   private readonly igUserId: string | null;
@@ -446,10 +448,45 @@ export class InstagramAdapter extends ProviderBackedAdapter implements TopicalAd
    */
   override async latestShorts(query: LatestShortsQuery): Promise<ShortRecord[]> {
     if (this.provider) return this.provider.latestShorts(query);
-
     const reason = await this.unavailableReason();
     if (reason) throw new PlatformUnavailableError(PLATFORM, reason);
+    return this.walkCreators(this.seeds, query);
+  }
 
+  /** This adapter can enumerate a named creator. See lib/platform/channels.ts. */
+  readonly [READS_CHANNELS] = true as const;
+
+  /**
+   * The latest shorts of a topic's own Instagram creators. Through the vendor
+   * provider when one is configured — one client, one meter (see
+   * `ScrapeCreatorsProvider.latestShortsForCreators`) — otherwise the same Meta
+   * Business Discovery walk `latestShorts` uses, aimed at these handles. An empty
+   * or unaddressable list returns [] rather than failing.
+   */
+  async latestShortsForChannels(
+    channels: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
+    const handles = channels.map((c) => c.trim().replace(/^@/, "")).filter(Boolean);
+    if (handles.length === 0) return [];
+    const enumerator = asCreatorEnumerating(this.provider);
+    if (enumerator) return enumerator.latestShortsForCreators(handles, query);
+    // A provider that cannot enumerate creators (not the Instagram vendor path)
+    // has nothing to add here — the Meta walk below is the only other route.
+    if (this.provider) return [];
+    const reason = await this.unavailableReason();
+    if (reason) throw new PlatformUnavailableError(PLATFORM, reason);
+    return this.walkCreators(handles, query);
+  }
+
+  /**
+   * The Meta Business Discovery walk over a given list of handles — the shared
+   * body of the no-provider `latestShorts` and `latestShortsForChannels`.
+   */
+  private async walkCreators(
+    handles: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1) {
       throw new MetaUnreadableError(PLATFORM, `limit must be a positive integer, got ${query.limit}`);
     }
@@ -458,7 +495,7 @@ export class InstagramAdapter extends ProviderBackedAdapter implements TopicalAd
     const discoveredAt = this.now().toISOString();
     const kept: ShortRecord[] = [];
 
-    for (const username of this.seeds) {
+    for (const username of handles) {
       const { body } = await metaGet<BusinessDiscoveryResponse>({
         platform: PLATFORM,
         path: this.igUserId as string,

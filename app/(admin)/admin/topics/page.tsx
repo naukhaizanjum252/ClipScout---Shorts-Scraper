@@ -5,9 +5,19 @@ import { resolveCredentialStore } from "@/lib/credentials/resolve";
 import { resolveSeedStore } from "@/lib/shorts/seeds";
 import { resolveTopicStore, TopicsNotInstalledError } from "@/lib/shorts/topic-store";
 
-import { addTopic, restorePlanTopics, setTopicActive, setTopicTerms } from "./actions";
+import { resolveTopicChannelStore, type TopicChannel } from "@/lib/shorts/topic-channels";
+
+import {
+  addTopic,
+  addTopicChannel,
+  removeTopicChannel,
+  restorePlanTopics,
+  setTopicActive,
+  setTopicChannelActive,
+  setTopicTerms,
+} from "./actions";
 import { TopicsPanel } from "./topics-panel";
-import type { PlatformReach } from "./view";
+import type { ChannelsByTopic, PlatformReach } from "./view";
 
 /**
  * /admin/topics — what this deployment is looking for.
@@ -69,10 +79,14 @@ export default async function TopicsPage() {
         explanation={explanation}
         readOnlyReason={notInstalled ?? store.readOnlyReason}
         reach={await reachOfEachPlatform()}
+        channels={await channelsByTopic()}
         addTopic={addTopic}
         setTopicTerms={setTopicTerms}
         setTopicActive={setTopicActive}
         restorePlanTopics={restorePlanTopics}
+        addTopicChannel={addTopicChannel}
+        setTopicChannelActive={setTopicChannelActive}
+        removeTopicChannel={removeTopicChannel}
       />
     </main>
   );
@@ -88,6 +102,28 @@ export default async function TopicsPage() {
  * finding out of a local fault. The same rule the run applies to an empty
  * result.
  */
+/**
+ * Every topic's channels, grouped by slug, for the panel.
+ *
+ * TOLERANT: a deployment that has not run migration 19 has no `topic_channels`
+ * table, and reading it throws. That must not take the page down — the topics
+ * still edit fine — so a failure is logged and treated as "no topic has
+ * channels", the same tolerance /admin/library and the run path keep.
+ */
+async function channelsByTopic(): Promise<ChannelsByTopic> {
+  try {
+    const { store } = await resolveTopicChannelStore();
+    const grouped: Record<string, TopicChannel[]> = {};
+    for (const row of await store.listChannels()) {
+      (grouped[row.topic_slug] ??= []).push(row);
+    }
+    return grouped;
+  } catch (cause) {
+    console.error("[admin/topics] the topic channels could not be read:", cause);
+    return {};
+  }
+}
+
 const REACH_TTL_MS = 60_000;
 let reachCache: { at: number; value: PlatformReach[] } | null = null;
 

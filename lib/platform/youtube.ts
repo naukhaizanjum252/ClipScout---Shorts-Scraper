@@ -77,6 +77,7 @@ import { parseDurationSeconds } from "../yt/duration";
 import { isChannelId, parseChannelRef, uploadsPlaylistId } from "../yt/channel-ref";
 import type { LatestShortsQuery } from "./adapter";
 import { READS_TOPICS, type TopicalAdapter } from "./topical";
+import { READS_CHANNELS, type ChannelReadingAdapter } from "./channels";
 import { cleanTerms, youtubeSearchTerm, type Topic } from "../shorts/topics";
 import type { Platform, ShortRecord } from "./types";
 import { PlatformUnavailableError } from "./unavailable";
@@ -131,7 +132,7 @@ interface VideoResource {
   statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
 }
 
-export class YouTubeAdapter implements TopicalAdapter {
+export class YouTubeAdapter implements TopicalAdapter, ChannelReadingAdapter {
   readonly platform = PLATFORM;
 
   /**
@@ -252,6 +253,20 @@ export class YouTubeAdapter implements TopicalAdapter {
     const reason = await this.unavailableReason();
     if (reason) throw new PlatformUnavailableError(PLATFORM, reason);
 
+    const kept = await this.walkChannels(this.usable, query);
+    return this.client ? await this.hydrate(kept) : kept;
+  }
+
+  /**
+   * Walk a given list of channels, filtered to Shorts over the threshold. The
+   * shared body of `latestShorts` (the seeded walk) and `latestShortsForChannels`
+   * (a topic's own channels) — same yt-dlp listing, same per-channel error
+   * handling, so the two paths cannot drift. Does NOT hydrate; callers decide.
+   */
+  private async walkChannels(
+    channels: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
     const discoveredAt = this.now().toISOString();
     const kept: ShortRecord[] = [];
     // ONE UNREADABLE CHANNEL MUST NOT COST THE OTHER 199.
@@ -270,7 +285,7 @@ export class YouTubeAdapter implements TopicalAdapter {
     // fails, because that is a broken extractor rather than a quiet week.
     const unreadable: string[] = [];
 
-    for (const seed of this.usable) {
+    for (const seed of channels) {
       const channelId = await this.channelId(seed);
       const playlist = uploadsPlaylistId(channelId);
       const body = (await ytDlpJson(this.run, PLATFORM, [
@@ -301,16 +316,16 @@ export class YouTubeAdapter implements TopicalAdapter {
       }
     }
 
-    // Every single seed came back unreadable. That is the extractor breaking,
+    // Every single channel came back unreadable. That is the extractor breaking,
     // not YouTube having a quiet week, and it must not arrive as an empty list.
-    if (this.usable.length > 0 && unreadable.length === this.usable.length) {
+    if (channels.length > 0 && unreadable.length === channels.length) {
       throw new YtDlpError(
         PLATFORM,
-        `all ${this.usable.length} readable seed(s) came back unreadable. First: ${unreadable[0]}`,
+        `all ${channels.length} readable channel(s) came back unreadable. First: ${unreadable[0]}`,
       );
     }
 
-    return this.client ? await this.hydrate(kept) : kept;
+    return kept;
   }
 
   /**
@@ -357,6 +372,35 @@ export class YouTubeAdapter implements TopicalAdapter {
    * demands, rather than the widened `boolean` a bare initialiser would give.
    */
   readonly [READS_TOPICS] = true as const;
+
+  /** This adapter can also enumerate named channels. See lib/platform/channels.ts. */
+  readonly [READS_CHANNELS] = true as const;
+
+  /**
+   * The latest shorts of a topic's own YouTube channels — the seeded walk aimed
+   * at an explicit list instead of `this.seeds`. Same yt-dlp listing and same
+   * per-channel error handling via `walkChannels`.
+   *
+   * Unusable entries (not a `UC...` id, @handle or channel URL) are dropped
+   * rather than thrown on — one bad channel must not cost the others — and an
+   * empty usable list returns [] rather than failing: the topic simply has no
+   * addressable YouTube channels, which is not a broken read. yt-dlp itself
+   * still has to be reachable; if it is not, that surfaces as a throw the caller
+   * reports, exactly as the seeded walk does.
+   */
+  async latestShortsForChannels(
+    channels: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
+    const usable = channels.map((c) => c.trim()).filter(Boolean).filter((c) => parses(c));
+    if (usable.length === 0) return [];
+
+    const ytdlp = await this.ytDlpUnavailable();
+    if (ytdlp) throw new PlatformUnavailableError(PLATFORM, ytdlp);
+
+    const kept = await this.walkChannels(usable, query);
+    return this.client ? await this.hydrate(kept) : kept;
+  }
 
   /**
    * Why a topic cannot be searched for, or null.

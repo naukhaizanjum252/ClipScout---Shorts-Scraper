@@ -1704,6 +1704,73 @@ details.forecast-why > p {
   }
 }
 
+/* --- per-topic channels editor -------------------------------------------- */
+.channels-editor {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.channels-group {
+  margin-top: 8px;
+}
+
+.channels-group-head {
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 6px 0 4px;
+}
+
+.channels-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.channels-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.channels-row[data-off] {
+  opacity: 0.55;
+}
+
+.channels-id {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.channels-auto {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.channels-off {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.channels-add {
+  margin-top: 10px;
+  align-items: end;
+}
+
 /* --- route loading fallback ----------------------------------------------- */
 /* Shown the instant a nav click starts, while the dynamic page renders on the
    server (see _components/route-loading.tsx). Sits where the page content will,

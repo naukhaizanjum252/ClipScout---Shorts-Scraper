@@ -19,6 +19,7 @@ import {
   safeToShowMessage,
 } from "@/lib/shorts/run";
 import { resolveSeedStore } from "@/lib/shorts/seeds";
+import { activeChannelsByPlatform, resolveTopicChannelStore } from "@/lib/shorts/topic-channels";
 import { activeTopics, resolveTopicStore, TopicsNotInstalledError } from "@/lib/shorts/topic-store";
 import { topicRef, type Topic, type TopicRef } from "@/lib/shorts/topics";
 import { ShortsStoreError, type ShortsStore } from "@/lib/shorts/store";
@@ -706,6 +707,39 @@ async function resolveStore(): Promise<ShortsStore> {
 }
 
 /**
+ * The channels each searched topic owns, per platform — the map `run` enumerates
+ * alongside keyword search (lib/shorts/topic-channels.ts).
+ *
+ * TOLERANT BY DESIGN. A deployment that has not run migration 19 has no
+ * `topic_channels` table; reading it throws, and that must NOT stop a run that
+ * would otherwise search by keyword exactly as it always has. So a failure is
+ * logged and treated as "no topic has channels" — the same tolerance
+ * /admin/library keeps for the unverified table. Only the searched topics are
+ * grouped, so a narrowed run does not carry thirty other topics' channels.
+ */
+async function topicChannelsForRun(
+  topics: readonly Topic[],
+): Promise<ReadonlyMap<string, Partial<Record<Platform, readonly string[]>>>> {
+  const map = new Map<string, Partial<Record<Platform, readonly string[]>>>();
+  if (topics.length === 0) return map;
+  try {
+    const { store } = await resolveTopicChannelStore();
+    const wanted = new Set(topics.map((t) => t.slug));
+    const bySlug = new Map<string, Awaited<ReturnType<typeof store.listChannels>>>();
+    for (const row of await store.listChannels()) {
+      if (!wanted.has(row.topic_slug)) continue;
+      const list = bySlug.get(row.topic_slug) ?? [];
+      list.push(row);
+      bySlug.set(row.topic_slug, list);
+    }
+    for (const [slug, rows] of bySlug) map.set(slug, activeChannelsByPlatform(rows));
+  } catch (cause) {
+    console.error(`${LOG_TAG} topic channels could not be read; running keywords only:`, cause);
+  }
+  return map;
+}
+
+/**
  * Read every platform this deployment can reach, keep the ones over the
  * threshold, and report what happened to each.
  *
@@ -764,6 +798,10 @@ export async function getLatestShorts(request: RunRequest): Promise<RunOutcome> 
     const subjects = await topicsForRun(topicSlug);
     if (!subjects.ok) return { ok: false, message: subjects.message };
 
+    // The channels each searched topic owns, enumerated alongside its keywords.
+    // Tolerant: no table / no channels just means a keyword-only run.
+    const topicChannels = await topicChannelsForRun(subjects.topics);
+
     const report = await runLatestShorts({
       adapters,
       store: await resolveStore(),
@@ -774,6 +812,7 @@ export async function getLatestShorts(request: RunRequest): Promise<RunOutcome> 
       platforms,
       topics: subjects.topics,
       topic: subjects.topic,
+      topicChannels,
     });
 
     // The words the page will not print. An operator debugging a broken adapter

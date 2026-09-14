@@ -122,6 +122,41 @@ export function asKeywordSearching(
 }
 
 /**
+ * A provider that can enumerate a NAMED CREATOR — the vendor half of the
+ * per-topic channels feature. Separate from keyword search because a vendor may
+ * sell one and not the other: ScrapeCreators enumerates an Instagram creator
+ * (`/v1/instagram/user/reels`) but has no TikTok or Facebook creator endpoint.
+ * The seam is HANDLES, not the vendor's source objects, for the same reason
+ * `KeywordSearchingProvider` takes words.
+ */
+export const ENUMERATES_CREATORS: unique symbol = Symbol.for("shorts-scraper.enumerates-creators");
+
+export interface CreatorEnumeratingProvider extends ProviderClient {
+  readonly [ENUMERATES_CREATORS]: true;
+  /**
+   * The latest shorts of these creators. Same contract as `latestShorts`:
+   * throws on failure, never returns `[]` to mean "broken"; an empty or
+   * unaddressable handle list returns [] because the caller named none it can
+   * read, which is not a failure.
+   */
+  latestShortsForCreators(
+    handles: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]>;
+}
+
+/** The capability test. Null for a provider that cannot enumerate a creator. */
+export function asCreatorEnumerating(
+  provider: ProviderClient | null,
+): CreatorEnumeratingProvider | null {
+  if (!provider) return null;
+  const candidate = provider as Partial<CreatorEnumeratingProvider>;
+  if (candidate[ENUMERATES_CREATORS] !== true) return null;
+  if (typeof candidate.latestShortsForCreators !== "function") return null;
+  return provider as CreatorEnumeratingProvider;
+}
+
+/**
  * An adapter for a platform whose reader has to come from outside yt-dlp.
  *
  * Subclasses supply three things and nothing else: which platform, the human

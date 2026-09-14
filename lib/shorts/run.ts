@@ -86,6 +86,7 @@ import type { LatestShortsQuery, PlatformAdapter } from "../platform/adapter";
 import { measurementCaveat } from "../platform/caveat";
 import { PLATFORMS, platformLabel, type Platform, type ShortRecord } from "../platform/types";
 import { asTopical, noTopicalReaderReason } from "../platform/topical";
+import { asChannelReader } from "../platform/channels";
 import { cleanTerms, type Topic, type TopicRef } from "./topics";
 import { shortKey, type ShortsStore } from "./store";
 
@@ -887,6 +888,19 @@ export interface LatestShortsRunOptions {
    * before anything is read; see `runLatestShorts`.
    */
   readonly topic?: TopicRef | null;
+  /**
+   * A TOPIC'S OWN CHANNELS, per platform, enumerated alongside its keyword
+   * search — keyed by topic slug (lib/shorts/topic-channels.ts). Omitted means
+   * no topic has channels, which is every run made before this feature and every
+   * caller that has not opted in.
+   *
+   * Enumerated on the SAME adapter instance the keyword search uses, through the
+   * `ChannelReadingAdapter` seam — one client, one meter (see
+   * lib/platform/channels.ts). Only platforms that can enumerate a creator
+   * (YouTube, Instagram, TikTok) act on it; the rest ignore it. A channel-read
+   * that fails does NOT discard the topic's keyword rows — see `runTopics`.
+   */
+  readonly topicChannels?: ReadonlyMap<string, Partial<Record<Platform, readonly string[]>>>;
   /** Injected in tests so a report is comparable. Defaults to the wall clock. */
   readonly now?: () => string;
 }
@@ -1080,9 +1094,11 @@ async function runTopics(
   query: LatestShortsQuery,
   topics: readonly Topic[],
   description: string,
+  topicChannels?: ReadonlyMap<string, Partial<Record<Platform, readonly string[]>>>,
 ): Promise<AdapterResult> {
   const platform = adapter.platform;
   const topical = asTopical(adapter);
+  const channelReader = asChannelReader(adapter);
 
   if (!topical) {
     return {
@@ -1112,6 +1128,31 @@ async function runTopics(
     }
     rows.push(...(await topical.latestShortsForTopic(topic, query)));
     searched.push(topic.slug);
+
+    // THIS TOPIC'S OWN CHANNELS, enumerated on the same adapter and labelled
+    // with the topic here — the same "the object that asked is the one that
+    // labels" rule `providerTopicShorts` follows for keyword rows. Only when the
+    // adapter can enumerate a creator (YouTube/Instagram/TikTok) and this topic
+    // named channels for this platform.
+    const channels = topicChannels?.get(topic.slug)?.[platform] ?? [];
+    if (channelReader && channels.length > 0) {
+      try {
+        const channelRows = await channelReader.latestShortsForChannels(channels, query);
+        rows.push(...channelRows.map((row) => ({ ...row, topic_slug: topic.slug })));
+      } catch (cause) {
+        // A CHANNEL READ THAT FAILS MUST NOT DISCARD THIS TOPIC'S KEYWORD ROWS,
+        // which is why it is caught here rather than allowed to fail the whole
+        // platform the way a keyword throw does. The keyword search already
+        // succeeded and its rows are in hand; losing them because a creator
+        // listing broke would be the arithmetic-honesty failure pointing the
+        // wrong way. The reason goes to the log, tagged for this platform.
+        console.error(
+          `[run] ${platform} channel enumeration for topic ${JSON.stringify(topic.slug)} failed; ` +
+            "keyword rows kept:",
+          cause,
+        );
+      }
+    }
   }
 
   const account: TopicAccount = { searched, refused };
@@ -1149,6 +1190,7 @@ async function runAdapter(
   adapter: PlatformAdapter,
   query: LatestShortsQuery,
   topics: readonly Topic[],
+  topicChannels?: ReadonlyMap<string, Partial<Record<Platform, readonly string[]>>>,
 ): Promise<AdapterResult> {
   const platform = adapter.platform;
   let description = "";
@@ -1159,7 +1201,7 @@ async function runAdapter(
     // the untargeted read on the way past. That fall-through is the bug this
     // whole change exists to prevent: it would return the same everything-that-
     // is-big list, now wearing a subject's name.
-    if (topics.length > 0) return await runTopics(adapter, query, topics, description);
+    if (topics.length > 0) return await runTopics(adapter, query, topics, description, topicChannels);
 
     // ASKED BEFORE `latestShorts`, ALWAYS. This is the method that keeps "could
     // not be read" from collapsing into "no results", and it only does that if
@@ -1276,7 +1318,7 @@ export async function getLatestShorts(options: LatestShortsRunOptions): Promise<
     );
   }
   const results = await Promise.all(
-    ordered.map((platform) => runAdapter(byPlatform.get(platform)!, query, topics)),
+    ordered.map((platform) => runAdapter(byPlatform.get(platform)!, query, topics, options.topicChannels)),
   );
   const resultFor = new Map(results.map((result) => [result.platform, result]));
 

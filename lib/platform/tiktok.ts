@@ -114,6 +114,7 @@ import {
   READS_TOPICS,
   type TopicalAdapter,
 } from "./topical";
+import { READS_CHANNELS, type ChannelReadingAdapter } from "./channels";
 import type { Topic } from "../shorts/topics";
 import { PlatformUnavailableError, ProviderBackedAdapter, type ProviderClient } from "./unavailable";
 import {
@@ -184,7 +185,7 @@ export interface TikTokAdapterOptions {
   readonly now?: () => Date;
 }
 
-export class TikTokAdapter extends ProviderBackedAdapter implements TopicalAdapter {
+export class TikTokAdapter extends ProviderBackedAdapter implements TopicalAdapter, ChannelReadingAdapter {
   readonly platform: Platform = PLATFORM;
 
   private readonly seeds: readonly string[];
@@ -333,6 +334,39 @@ export class TikTokAdapter extends ProviderBackedAdapter implements TopicalAdapt
     const reason = await this.unavailableReason();
     if (reason) throw new PlatformUnavailableError(PLATFORM, reason);
 
+    return this.walkUsers(this.usable, query);
+  }
+
+  /** This adapter can enumerate a named creator (by sec_uid). See lib/platform/channels.ts. */
+  readonly [READS_CHANNELS] = true as const;
+
+  /**
+   * The latest shorts of a topic's own TikTok creators, by sec_uid, through
+   * yt-dlp — ALWAYS the keyless path, even when a ScrapeCreators provider is
+   * configured, because that vendor sells TikTok keyword/region search but no
+   * creator enumeration. Unusable values (not a sec_uid) are dropped and an
+   * empty list returns [] rather than failing; yt-dlp itself still has to be
+   * reachable, which surfaces as a throw the caller reports.
+   */
+  async latestShortsForChannels(
+    channels: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
+    const usable = channels.map((c) => c.trim()).filter(Boolean).filter((c) => SEC_UID.test(c));
+    if (usable.length === 0) return [];
+    const ytdlp = await this.ytDlpUnavailable();
+    if (ytdlp) throw new PlatformUnavailableError(PLATFORM, ytdlp);
+    return this.walkUsers(usable, query);
+  }
+
+  /**
+   * The yt-dlp `tiktokuser:` walk over a given list of sec_uids — the shared body
+   * of the no-provider `latestShorts` and `latestShortsForChannels`.
+   */
+  private async walkUsers(
+    seeds: readonly string[],
+    query: LatestShortsQuery,
+  ): Promise<ShortRecord[]> {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1) {
       throw new YtDlpError(PLATFORM, `limit must be a positive integer, got ${query.limit}`);
     }
@@ -340,7 +374,7 @@ export class TikTokAdapter extends ProviderBackedAdapter implements TopicalAdapt
     const discoveredAt = this.now().toISOString();
     const kept: ShortRecord[] = [];
 
-    for (const seed of this.usable) {
+    for (const seed of seeds) {
       const body = (await ytDlpJson(this.run, PLATFORM, [
         "--flat-playlist",
         "-J",

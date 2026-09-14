@@ -8,6 +8,7 @@
  */
 import type { Platform } from "@/lib/platform/types";
 import type { Topic } from "@/lib/shorts/topics";
+import type { TopicChannel } from "@/lib/shorts/topic-channels";
 
 /** What every action on this page answers with. */
 export type TopicActionResult =
@@ -52,6 +53,37 @@ export const FIELD = {
   slug: "topicSlug",
   active: "topicActive",
 } as const;
+
+/**
+ * The platforms a topic can own channels on — the three that can enumerate a
+ * creator (YouTube by channel, Instagram by handle, TikTok by sec_uid). X and
+ * Facebook are omitted on purpose: X has no user-timeline read and Facebook has
+ * no creator search, so a channel there could never be enumerated.
+ */
+export const CHANNEL_PLATFORMS = ["youtube", "instagram", "tiktok"] as const satisfies readonly Platform[];
+export type ChannelPlatform = (typeof CHANNEL_PLATFORMS)[number];
+
+export function isChannelPlatform(value: unknown): value is ChannelPlatform {
+  return typeof value === "string" && (CHANNEL_PLATFORMS as readonly string[]).includes(value);
+}
+
+/** What identifier to paste for each platform — shown by the add form. */
+export const CHANNEL_HINT: Record<ChannelPlatform, string> = {
+  youtube: "A channel URL, @handle, or UC… channel id",
+  instagram: "A creator @handle",
+  tiktok: "A creator sec_uid (MS4wLjABAAAA…) — TikTok's internal id, not the @handle",
+};
+
+/** Field names for the channel forms, kept apart from the topic ones. */
+export const CHANNEL_FIELD = {
+  topicSlug: "chTopicSlug",
+  platform: "chPlatform",
+  channel: "chChannel",
+  active: "chActive",
+} as const;
+
+/** A topic's channels, grouped by topic slug, for the panel. */
+export type ChannelsByTopic = Readonly<Record<string, readonly TopicChannel[]>>;
 
 /**
  * One term per line is how the textarea is read and written.

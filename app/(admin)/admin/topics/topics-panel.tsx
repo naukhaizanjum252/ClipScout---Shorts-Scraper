@@ -22,15 +22,31 @@
  */
 import { useState, useTransition } from "react";
 
+import { platformLabel } from "@/lib/platform/types";
 import type { Topic } from "@/lib/shorts/topics";
+import type { TopicChannel } from "@/lib/shorts/topic-channels";
 
-import { FIELD, termsToText, type TopicActionResult, type TopicsView } from "./view";
+import {
+  CHANNEL_FIELD,
+  CHANNEL_HINT,
+  CHANNEL_PLATFORMS,
+  FIELD,
+  termsToText,
+  type ChannelPlatform,
+  type ChannelsByTopic,
+  type TopicActionResult,
+  type TopicsView,
+} from "./view";
 
 export interface TopicsPanelProps extends TopicsView {
+  readonly channels: ChannelsByTopic;
   readonly addTopic: (form: FormData) => Promise<TopicActionResult>;
   readonly setTopicTerms: (form: FormData) => Promise<TopicActionResult>;
   readonly setTopicActive: (form: FormData) => Promise<TopicActionResult>;
   readonly restorePlanTopics: () => Promise<TopicActionResult>;
+  readonly addTopicChannel: (form: FormData) => Promise<TopicActionResult>;
+  readonly setTopicChannelActive: (form: FormData) => Promise<TopicActionResult>;
+  readonly removeTopicChannel: (form: FormData) => Promise<TopicActionResult>;
 }
 
 export function TopicsPanel(props: TopicsPanelProps) {
@@ -209,8 +225,12 @@ export function TopicsPanel(props: TopicsPanelProps) {
                   topic={topic}
                   editable={editable}
                   pending={pending}
+                  channels={props.channels[topic.slug] ?? []}
                   onSaveTerms={(form) => run(() => props.setTopicTerms(form))}
                   onToggle={(form) => run(() => props.setTopicActive(form))}
+                  onAddChannel={(form) => run(() => props.addTopicChannel(form))}
+                  onToggleChannel={(form) => run(() => props.setTopicChannelActive(form))}
+                  onRemoveChannel={(form) => run(() => props.removeTopicChannel(form))}
                 />
               ))}
             </div>
@@ -225,14 +245,22 @@ function TopicRow({
   topic,
   editable,
   pending,
+  channels,
   onSaveTerms,
   onToggle,
+  onAddChannel,
+  onToggleChannel,
+  onRemoveChannel,
 }: {
   readonly topic: Topic;
   readonly editable: boolean;
   readonly pending: boolean;
+  readonly channels: readonly TopicChannel[];
   readonly onSaveTerms: (form: FormData) => void;
   readonly onToggle: (form: FormData) => void;
+  readonly onAddChannel: (form: FormData) => void;
+  readonly onToggleChannel: (form: FormData) => void;
+  readonly onRemoveChannel: (form: FormData) => void;
 }) {
   return (
     <details className="row-edit">
@@ -244,6 +272,11 @@ function TopicRow({
         <strong>{topic.name}</strong>{" "}
         <span className="dim">
           {topic.terms.length} term{topic.terms.length === 1 ? "" : "s"}
+          {channels.some((c) => c.active)
+            ? ` · ${channels.filter((c) => c.active).length} channel${
+                channels.filter((c) => c.active).length === 1 ? "" : "s"
+              }`
+            : ""}
         </span>
       </summary>
 
@@ -288,9 +321,133 @@ function TopicRow({
                   : "Puts it back into the next run."}
               </span>
             </form>
+
+            <ChannelsEditor
+              topicSlug={topic.slug}
+              channels={channels}
+              pending={pending}
+              onAdd={onAddChannel}
+              onToggle={onToggleChannel}
+              onRemove={onRemoveChannel}
+            />
           </>
         ) : null}
       </div>
     </details>
+  );
+}
+
+/**
+ * THE PER-TOPIC CHANNEL LIST, ON THE SAME ROW AS THE TERMS.
+ *
+ * Channels are the second way a topic is searched (the first is its keywords),
+ * so they belong here beside them rather than on a screen of their own. Only the
+ * three platforms that can enumerate a creator are offered; the add form's
+ * placeholder says exactly what to paste for the chosen one, because the three
+ * are genuinely different (a YouTube handle, an Instagram handle, a TikTok
+ * sec_uid) and a wrong-shape value is a channel that silently returns nothing.
+ * Auto-added rows are marked, so an operator can tell what the self-growing loop
+ * chose from what they chose themselves.
+ */
+function ChannelsEditor({
+  topicSlug,
+  channels,
+  pending,
+  onAdd,
+  onToggle,
+  onRemove,
+}: {
+  readonly topicSlug: string;
+  readonly channels: readonly TopicChannel[];
+  readonly pending: boolean;
+  readonly onAdd: (form: FormData) => void;
+  readonly onToggle: (form: FormData) => void;
+  readonly onRemove: (form: FormData) => void;
+}) {
+  const [platform, setPlatform] = useState<ChannelPlatform>("youtube");
+  const present = CHANNEL_PLATFORMS.filter((p) => channels.some((c) => c.platform === p));
+
+  return (
+    <div className="channels-editor stack">
+      <p className="panel-title">Channels searched with this topic</p>
+      <p className="hint">
+        As well as the keywords, a run reads these creators&rsquo; latest posts and files them under
+        this topic. YouTube, Instagram and TikTok only — X and Facebook can&rsquo;t enumerate a
+        creator.
+      </p>
+
+      {channels.length === 0 ? (
+        <p className="faint">
+          No channels yet. Add one below — or leave it: the tool grows this list from the channels
+          that perform for this topic.
+        </p>
+      ) : (
+        present.map((p) => (
+          <div key={p} className="channels-group">
+            <p className="channels-group-head mono">{platformLabel(p)}</p>
+            <ul className="channels-list">
+              {channels
+                .filter((c) => c.platform === p)
+                .map((c) => (
+                  <li key={c.channel} className="channels-row" data-off={!c.active || undefined}>
+                    <span className="mono channels-id" title={c.channel}>
+                      {c.channel}
+                    </span>
+                    {c.source === "auto" ? (
+                      <span className="channels-auto" title="Added automatically from what performs for this topic.">
+                        auto
+                      </span>
+                    ) : null}
+                    {!c.active ? <span className="channels-off">off</span> : null}
+                    <form action={onToggle}>
+                      <input type="hidden" name={CHANNEL_FIELD.topicSlug} value={topicSlug} />
+                      <input type="hidden" name={CHANNEL_FIELD.platform} value={p} />
+                      <input type="hidden" name={CHANNEL_FIELD.channel} value={c.channel} />
+                      <input type="hidden" name={CHANNEL_FIELD.active} value={c.active ? "false" : "true"} />
+                      <button type="submit" className="btn btn-quiet btn-small" disabled={pending}>
+                        {c.active ? "Off" : "On"}
+                      </button>
+                    </form>
+                    <form action={onRemove}>
+                      <input type="hidden" name={CHANNEL_FIELD.topicSlug} value={topicSlug} />
+                      <input type="hidden" name={CHANNEL_FIELD.platform} value={p} />
+                      <input type="hidden" name={CHANNEL_FIELD.channel} value={c.channel} />
+                      <button type="submit" className="btn btn-quiet btn-small" disabled={pending}>
+                        Remove
+                      </button>
+                    </form>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))
+      )}
+
+      <form className="channels-add form-grid" action={onAdd}>
+        <input type="hidden" name={CHANNEL_FIELD.topicSlug} value={topicSlug} />
+        <label className="field">
+          <span>Platform</span>
+          <select
+            name={CHANNEL_FIELD.platform}
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value as ChannelPlatform)}
+          >
+            {CHANNEL_PLATFORMS.map((p) => (
+              <option key={p} value={p}>
+                {platformLabel(p)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Channel</span>
+          <input name={CHANNEL_FIELD.channel} placeholder={CHANNEL_HINT[platform]} />
+        </label>
+        <button type="submit" className="btn btn-small" disabled={pending}>
+          Add channel
+        </button>
+        <span className="hint">{CHANNEL_HINT[platform]}</span>
+      </form>
+    </div>
   );
 }

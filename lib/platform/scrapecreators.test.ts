@@ -87,6 +87,7 @@ import {
   type RunAccount,
 } from "../shorts/run";
 import type { ShortRecord } from "./types";
+import { asCreatorEnumerating } from "./unavailable";
 
 const KEY = "sc-live-not-a-real-key-8842";
 const NOW = () => new Date("2026-09-04T12:00:00.000Z");
@@ -1259,3 +1260,41 @@ describe("total readers — a changed subfield must not kill a platform", () => 
 // A no-op reference so the linter cannot prune the import that documents the
 // safe-to-print rule this file asserts against.
 markSafeToShow(class extends Error {});
+
+// ===========================================================================
+describe("Instagram creator enumeration (a topic's channels)", () => {
+  it("enumerates handles through /v1/instagram/user/reels on the same client", async () => {
+    const { fn, calls } = stubFetch({ body: igReelsBody({ paging_info: { more_available: false } }) });
+    // Built with NO configured sources — the handles are passed explicitly, as a
+    // topic run does; the one client/meter is reused.
+    const { provider: p } = provider(fn, "instagram", []);
+    const rows = await p.latestShortsForCreators(["@someone"], QUERY);
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(calls[0]).toContain("/v1/instagram/user/reels");
+    expect(rows.every((r) => r.platform === "instagram")).toBe(true);
+  });
+
+  it("returns [] for a handle list with nothing usable, sending no request", async () => {
+    const { fn, calls } = stubFetch({ body: igReelsBody() });
+    const { provider: p } = provider(fn, "instagram", []);
+    expect(await p.latestShortsForCreators(["   ", "@"], QUERY)).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is a capability only the Instagram provider advertises", () => {
+    const ig = provider(stubFetch({ body: igReelsBody() }).fn, "instagram", []).provider;
+    const tk = provider(stubFetch({ body: trendingBody() }).fn, "tiktok", [
+      { kind: "trending", region: "US" },
+    ]).provider;
+    expect(asCreatorEnumerating(ig)).not.toBeNull();
+    // TikTok creators are read by sec_uid through yt-dlp, not this vendor.
+    expect(asCreatorEnumerating(tk)).toBeNull();
+  });
+
+  it("refuses if a non-Instagram provider is asked to enumerate a creator", async () => {
+    const { fn } = stubFetch({ body: trendingBody() });
+    const tk = provider(fn, "tiktok", [{ kind: "trending", region: "US" }]).provider;
+    await expect(tk.latestShortsForCreators(["MS4wLjABAAAA"], QUERY)).rejects.toThrow();
+  });
+});
