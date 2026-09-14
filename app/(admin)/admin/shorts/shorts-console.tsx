@@ -1397,6 +1397,28 @@ function ForecastPanel({ outcome }: { readonly outcome: EstimateOutcome }) {
   // read nothing at all. Vacuously true and read by a person as "free".
   const nothingRuns = forecast.platforms.every((entry) => entry.kind === "not-running");
 
+  // THE FIGURE PRICES ONE READ PER PLATFORM. A run reads once per subject and
+  // also reads each subject's channels, so with more than one subject or any
+  // channels the quote is a FLOOR, not a total — and the panel has to say which.
+  // See EstimateScope. Absent scope (CLI, older callers) keeps the prior wording.
+  const scope = outcome.scope;
+  const beyondFloor = scope !== undefined && (scope.topics > 1 || scope.channels > 0);
+  const floorReasons: string[] = [];
+  if (scope && scope.topics > 1) {
+    floorReasons.push(`it reads all ${scope.topics} subjects on each selected platform`);
+  }
+  if (scope && scope.channels > 0) {
+    floorReasons.push(
+      `${scope.channels} topic channel${scope.channels === 1 ? "" : "s"} will also be read`,
+    );
+  }
+  if (forecast.unpriced > 0) {
+    floorReasons.push(
+      `${forecast.unpriced} ${forecast.unpriced === 1 ? "platform" : "platforms"} could not say what ` +
+        `${forecast.unpriced === 1 ? "it" : "they"} would cost`,
+    );
+  }
+
   return (
     <div className="note mt-4">
       <p>
@@ -1418,7 +1440,7 @@ function ForecastPanel({ outcome }: { readonly outcome: EstimateOutcome }) {
             <strong>Nothing would run</strong>, so there is nothing to price — not a figure of
             zero. Each platform above says what it is waiting for.
           </>
-        ) : forecast.unpriced === 0 ? (
+        ) : forecast.unpriced === 0 && !beyondFloor ? (
           <>
             Every platform that will run has quoted a figure, and they come to{" "}
             <span className="mono">{formatUsd(forecast.knownUsdMicros)}</span>.
@@ -1426,10 +1448,7 @@ function ForecastPanel({ outcome }: { readonly outcome: EstimateOutcome }) {
         ) : (
           <>
             <span className="mono">{formatUsd(forecast.knownUsdMicros)}</span> is a{" "}
-            <strong>floor, not a total</strong>:{" "}
-            <span className="mono">{forecast.unpriced}</span>{" "}
-            {forecast.unpriced === 1 ? "platform will run and could not say what it" : "platforms will run and could not say what they"}{" "}
-            would cost.
+            <strong>floor, not a total</strong>: {floorReasons.join("; ")}. The real cost is higher.
           </>
         )}
       </p>

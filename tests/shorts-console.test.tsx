@@ -1064,6 +1064,65 @@ describe("choosing which platforms to read", () => {
     expect(screen.queryByText(/estimated cost of one run/i)).toBeNull();
   });
 
+  it("calls the quote a floor, not a total, when the run will also read topic channels", async () => {
+    const user = userEvent.setup();
+    mount({
+      estimate: async () => ({
+        ok: true,
+        // One subject would make the per-platform price exact — but 3 channels
+        // are also read, which the forecast does not price. So it is a floor.
+        scope: { topics: 1, channels: 3 },
+        forecast: {
+          forecastAt: "2026-09-05T10:00:00.000Z",
+          minViews: CONFIGURED_THRESHOLD,
+          minDurationSeconds: 0,
+          maxDurationSeconds: CEILING,
+          limit: DEFAULT_LIMIT,
+          platforms: PLATFORMS.map((platform) =>
+            platform === "youtube"
+              ? { platform, kind: "priced" as const, usdMicros: 20_000, note: "about $0.02" }
+              : { platform, kind: "not-running" as const, usdMicros: null, note: "not selected" },
+          ),
+          knownUsdMicros: 20_000,
+          unpriced: 0,
+        },
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: /what will this cost/i }));
+    expect(await screen.findByText(/floor, not a total/i)).toBeTruthy();
+    expect(screen.getByText(/3 topic channels will also be read/i)).toBeTruthy();
+    expect(screen.queryByText(/quoted a figure, and they come to/i)).toBeNull();
+  });
+
+  it("quotes a firm total when one subject and no channels make the figure exact", async () => {
+    const user = userEvent.setup();
+    mount({
+      estimate: async () => ({
+        ok: true,
+        scope: { topics: 1, channels: 0 },
+        forecast: {
+          forecastAt: "2026-09-05T10:00:00.000Z",
+          minViews: CONFIGURED_THRESHOLD,
+          minDurationSeconds: 0,
+          maxDurationSeconds: CEILING,
+          limit: DEFAULT_LIMIT,
+          platforms: PLATFORMS.map((platform) =>
+            platform === "youtube"
+              ? { platform, kind: "priced" as const, usdMicros: 20_000, note: "about $0.02" }
+              : { platform, kind: "not-running" as const, usdMicros: null, note: "not selected" },
+          ),
+          knownUsdMicros: 20_000,
+          unpriced: 0,
+        },
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: /what will this cost/i }));
+    expect(await screen.findByText(/quoted a figure, and they come to/i)).toBeTruthy();
+    expect(screen.queryByText(/floor, not a total/i)).toBeNull();
+  });
+
   it("prints the reason a platform will not run, on the page and not in a tooltip", async () => {
     /*
      * SCAR, 2026-09-05. This panel put each platform's `note` in a `title`

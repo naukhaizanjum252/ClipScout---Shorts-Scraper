@@ -951,7 +951,25 @@ export async function estimateLatestShortsSpend(request: RunRequest): Promise<Es
       maxDurationSeconds,
       platforms,
     });
-    return { ok: true, forecast };
+
+    // WHY THE FIGURE IS A FLOOR, COUNTED SO THE PANEL CAN SAY IT. The forecast
+    // prices one read per platform; a run reads once per subject AND reads each
+    // subject's channels, both of which the forecast does not model. These two
+    // counts are what turn "this is the price" into "this is at least the price".
+    // Tolerant: a channel-store read that fails just means channels are shown as
+    // 0, never a failed estimate.
+    let channels = 0;
+    try {
+      const map = await topicChannelsForRun(subjects.topics);
+      const selected = new Set(platforms);
+      for (const perPlatform of map.values()) {
+        for (const platform of selected) channels += perPlatform[platform]?.length ?? 0;
+      }
+    } catch (cause) {
+      console.error(`${LOG_TAG} channel count for the estimate could not be read:`, cause);
+    }
+
+    return { ok: true, forecast, scope: { topics: subjects.topics.length, channels } };
   } catch (cause) {
     // Every per-platform failure is already folded into the forecast itself, so
     // reaching here means something structural. The words go to the log for the

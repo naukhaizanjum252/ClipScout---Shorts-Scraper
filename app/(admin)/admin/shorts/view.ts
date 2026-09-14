@@ -242,8 +242,26 @@ export type DownloadOutcome =
  * and the message a person reads is composed here rather than quoted.
  */
 export type EstimateOutcome =
-  | { readonly ok: true; readonly forecast: SpendForecastReport }
+  | { readonly ok: true; readonly forecast: SpendForecastReport; readonly scope?: EstimateScope }
   | { readonly ok: false; readonly message: string };
+
+/**
+ * WHY THE QUOTED FIGURE IS A FLOOR, IN NUMBERS THE PANEL CAN NAME.
+ *
+ * `forecastLatestShortsSpend` prices ONE read per platform, but a run makes one
+ * read per SUBJECT per platform and ALSO reads each subject's channels. So the
+ * figure is exact only for a run narrowed to one subject with no channels, and a
+ * floor otherwise. This carries the two counts that make it a floor, so the
+ * estimate can say so instead of presenting the floor as a total. Omitted on the
+ * callers that do not compute it (the CLI, older tests), where the panel falls
+ * back to its prior wording.
+ */
+export interface EstimateScope {
+  /** Subjects this run will search. 0 is an untargeted run. */
+  readonly topics: number;
+  /** Topic channels (across the searched subjects, on the selected platforms) also read. */
+  readonly channels: number;
+}
 
 /**
  * A URL that is safe to put in an `href`, or null.
