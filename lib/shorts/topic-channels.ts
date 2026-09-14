@@ -133,6 +133,9 @@ export interface TopicChannelStore {
 
   /** Hard-remove a channel from a topic — for a mistake, not for retiring a dud. */
   removeChannel(topicSlug: string, platform: Platform, channel: string): Promise<void>;
+
+  /** Remove ALL of a topic's channels — used when the topic itself is deleted. */
+  removeChannelsForTopic(topicSlug: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +266,14 @@ export class SupabaseTopicChannelStore implements TopicChannelStore {
       .eq("channel", channel);
     if (error) throw new TopicChannelStoreError(`removeChannel: ${error.message}`);
   }
+
+  async removeChannelsForTopic(topicSlug: string): Promise<void> {
+    const { error } = await this.client
+      .from(TOPIC_CHANNELS_TABLE)
+      .delete()
+      .eq("topic_slug", topicSlug);
+    if (error) throw new TopicChannelStoreError(`removeChannelsForTopic: ${error.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -340,6 +351,12 @@ export class MemoryTopicChannelStore implements TopicChannelStore {
 
   async removeChannel(topicSlug: string, platform: Platform, channel: string): Promise<void> {
     this.rows.delete(key(topicSlug, platform, channel));
+  }
+
+  async removeChannelsForTopic(topicSlug: string): Promise<void> {
+    for (const [k, row] of this.rows) {
+      if (row.topic_slug === topicSlug) this.rows.delete(k);
+    }
   }
 }
 

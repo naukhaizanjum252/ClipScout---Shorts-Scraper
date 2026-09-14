@@ -43,6 +43,7 @@ export interface TopicsPanelProps extends TopicsView {
   readonly addTopic: (form: FormData) => Promise<TopicActionResult>;
   readonly setTopicTerms: (form: FormData) => Promise<TopicActionResult>;
   readonly setTopicActive: (form: FormData) => Promise<TopicActionResult>;
+  readonly deleteTopic: (form: FormData) => Promise<TopicActionResult>;
   readonly restorePlanTopics: () => Promise<TopicActionResult>;
   readonly addTopicChannel: (form: FormData) => Promise<TopicActionResult>;
   readonly setTopicChannelActive: (form: FormData) => Promise<TopicActionResult>;
@@ -228,6 +229,7 @@ export function TopicsPanel(props: TopicsPanelProps) {
                   channels={props.channels[topic.slug] ?? []}
                   onSaveTerms={(form) => run(() => props.setTopicTerms(form))}
                   onToggle={(form) => run(() => props.setTopicActive(form))}
+                  onDelete={(form) => run(() => props.deleteTopic(form))}
                   onAddChannel={(form) => run(() => props.addTopicChannel(form))}
                   onToggleChannel={(form) => run(() => props.setTopicChannelActive(form))}
                   onRemoveChannel={(form) => run(() => props.removeTopicChannel(form))}
@@ -248,6 +250,7 @@ function TopicRow({
   channels,
   onSaveTerms,
   onToggle,
+  onDelete,
   onAddChannel,
   onToggleChannel,
   onRemoveChannel,
@@ -258,6 +261,7 @@ function TopicRow({
   readonly channels: readonly TopicChannel[];
   readonly onSaveTerms: (form: FormData) => void;
   readonly onToggle: (form: FormData) => void;
+  readonly onDelete: (form: FormData) => void;
   readonly onAddChannel: (form: FormData) => void;
   readonly onToggleChannel: (form: FormData) => void;
   readonly onRemoveChannel: (form: FormData) => void;
@@ -330,6 +334,32 @@ function TopicRow({
               onToggle={onToggleChannel}
               onRemove={onRemoveChannel}
             />
+
+            {/* THE ONE DESTRUCTIVE CONTROL, so it is set apart and asks first.
+                Everything else here is reversible (switch off, remove a channel);
+                deleting a topic is not, so it confirms and says what survives. */}
+            <div className="topic-danger">
+              <button
+                type="button"
+                className="btn btn-quiet btn-small btn-danger"
+                disabled={pending}
+                onClick={() => {
+                  const ok = window.confirm(
+                    `Delete “${topic.name}” and its channels?\n\n` +
+                      "This can't be undone. Clips it already found stay in the Library with their " +
+                      "label — only the topic and its channel list are removed. To just pause it, use " +
+                      "Switch off instead.",
+                  );
+                  if (!ok) return;
+                  const form = new FormData();
+                  form.set(FIELD.slug, topic.slug);
+                  onDelete(form);
+                }}
+              >
+                Delete topic
+              </button>
+              <span className="hint">Removes the topic and its channels. Found clips are kept.</span>
+            </div>
           </>
         ) : null}
       </div>

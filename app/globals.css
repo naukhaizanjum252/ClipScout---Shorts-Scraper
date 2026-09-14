@@ -1704,6 +1704,27 @@ details.forecast-why > p {
   }
 }
 
+/* --- delete a topic (the one destructive control) ------------------------- */
+.topic-danger {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline-soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-danger {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(251, 113, 133, 0.1);
+  border-color: var(--signal);
+}
+
 /* --- per-topic channels editor -------------------------------------------- */
 .channels-editor {
   margin-top: 12px;

@@ -1,0 +1,24 @@
+-- ============================================================================
+-- DELETE A TOPIC: the grant migration 14 deliberately withheld
+-- ============================================================================
+--
+-- Migration 14 granted `service_role` only `select, insert, update` on `topics`,
+-- with a comment saying a grant nothing uses is a grant that outlives its
+-- reason: nothing deleted a topic, so nothing was granted delete. Asad,
+-- 2026-09-15, asked to be able to remove a topic outright (not just switch it
+-- off), so the operation now exists — `TopicStore.deleteTopic`, reached by the
+-- admin console as service_role — and this is the grant that lets it through.
+--
+-- The `authenticated` role already has delete on `topics` (migration 14, behind
+-- the `is_admin()` policy), so this only adds the service_role half the console
+-- actually runs as.
+--
+-- WHAT DELETE DOES NOT CASCADE. `shorts.topic_slug` is a plain slug, not a
+-- foreign key (by design — see migration 01), so removing a topic leaves every
+-- short it found in place with its label intact: the history survives the
+-- question's removal. The topic's CHANNELS are removed by the action, not by a
+-- database cascade, because `topic_channels.topic_slug` is likewise a slug and
+-- not an FK.
+-- ============================================================================
+
+grant delete on shorts_scraper.topics to service_role;

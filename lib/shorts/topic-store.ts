@@ -102,8 +102,24 @@ export interface TopicStore {
    */
   setTopicTerms(slug: string, terms: readonly string[]): Promise<Topic>;
 
-  /** Off means "stop searching for this". There is no delete: history is kept. */
+  /**
+   * Off means "stop searching for this", keeping the row and its history. For
+   * when a topic should be paused, not removed — the reversible choice.
+   */
   setTopicActive(slug: string, active: boolean): Promise<Topic>;
+
+  /**
+   * Remove a topic outright.
+   *
+   * DESTRUCTIVE, AND THE ONE PLACE IN THIS STORE THAT IS. It deletes the topic
+   * row; the caller also removes the topic's channels (they key by this slug and
+   * would otherwise be orphaned). What it does NOT touch is the SHORTS this topic
+   * has already found: those keep their `topic_slug` as history — provenance that
+   * survives the topic's removal, exactly as the shorts table's own comment
+   * intends. So deleting a topic forgets the QUESTION, never the answers already
+   * gathered. Deleting a slug that is not there is not an error.
+   */
+  deleteTopic(slug: string): Promise<void>;
 
   /**
    * Write the plan's thirty topics, skipping any slug already present.
@@ -169,6 +185,11 @@ export class MemoryTopicStore implements TopicStore {
     const updated = { ...this.require(slug), active };
     this.rows.set(slug, updated);
     return updated;
+  }
+
+  async deleteTopic(slug: string): Promise<void> {
+    this.refuseIfReadOnly();
+    this.rows.delete(slug);
   }
 
   async seedPlanTopics(): Promise<Topic[]> {
@@ -288,6 +309,13 @@ export class SupabaseTopicStore implements TopicStore {
     if (error) throw new TopicStoreError(`setTopicActive: ${error.message}`);
     if (!data) throw new TopicStoreError(missingMessage(slug));
     return fromRow(data as TopicRow);
+  }
+
+  async deleteTopic(slug: string): Promise<void> {
+    // No `select().single()` and no missing-row check: deleting an absent slug
+    // is a no-op, not a failure — the end state is what was asked for either way.
+    const { error } = await this.client.from(TOPICS_TABLE).delete().eq("slug", slug);
+    if (error) throw new TopicStoreError(`deleteTopic: ${error.message}`);
   }
 
   async seedPlanTopics(): Promise<Topic[]> {

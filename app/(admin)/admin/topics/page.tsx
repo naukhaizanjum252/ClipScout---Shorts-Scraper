@@ -10,6 +10,7 @@ import { resolveTopicChannelStore, type TopicChannel } from "@/lib/shorts/topic-
 import {
   addTopic,
   addTopicChannel,
+  deleteTopic,
   removeTopicChannel,
   restorePlanTopics,
   setTopicActive,
@@ -83,6 +84,7 @@ export default async function TopicsPage() {
         addTopic={addTopic}
         setTopicTerms={setTopicTerms}
         setTopicActive={setTopicActive}
+        deleteTopic={deleteTopic}
         restorePlanTopics={restorePlanTopics}
         addTopicChannel={addTopicChannel}
         setTopicChannelActive={setTopicChannelActive}

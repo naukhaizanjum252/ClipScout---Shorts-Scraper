@@ -66,10 +66,24 @@ describe("MemoryTopicStore", () => {
     expect(mine.active).toBe(false);
   });
 
+  it("deletes a topic outright, and deleting an absent one is a no-op", async () => {
+    const store = new MemoryTopicStore([], { now: AT });
+    await store.addTopic({ name: "Shark Tank", terms: ["shark tank"] });
+    await store.addTopic({ name: "AGT", terms: ["agt"] });
+
+    await store.deleteTopic("shark-tank");
+    expect((await store.listTopics()).map((t) => t.slug)).toEqual(["agt"]);
+
+    // A slug that is not there deletes nothing and does not throw.
+    await expect(store.deleteTopic("never-existed")).resolves.toBeUndefined();
+    expect((await store.listTopics()).length).toBe(1);
+  });
+
   it("refuses every write when it is read-only", async () => {
     const store = new MemoryTopicStore(planTopics(AT), { readOnlyReason: "no database", now: AT });
     await expect(store.addTopic({ name: "X", terms: ["x"] })).rejects.toThrow("no database");
     await expect(store.setTopicActive("shark-tank", false)).rejects.toThrow("no database");
+    await expect(store.deleteTopic("shark-tank")).rejects.toThrow("no database");
     // Reading still works, which is the point of the fallback.
     expect((await store.listTopics()).length).toBe(30);
   });

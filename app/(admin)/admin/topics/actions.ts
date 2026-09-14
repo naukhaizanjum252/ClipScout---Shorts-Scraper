@@ -88,6 +88,57 @@ export async function setTopicActive(form: FormData): Promise<TopicActionResult>
 }
 
 /**
+ * Delete a topic outright — the one destructive action on this page.
+ *
+ * TWO STORES, IN ORDER. The topic row goes first; then its channels are removed
+ * best-effort. If the channel cleanup fails the topic is still gone and the
+ * leftover channels are harmless (nothing reads a deleted topic's channels), so
+ * that failure is logged, not surfaced as a failed delete. What is NOT removed
+ * is the shorts this topic found — they keep their label as history; see
+ * `TopicStore.deleteTopic`.
+ */
+export async function deleteTopic(form: FormData): Promise<TopicActionResult> {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) {
+    return { ok: false, message: "Only an admin can delete a topic." };
+  }
+  const slug = String(form.get(FIELD.slug) ?? "").trim();
+  if (!slug) return { ok: false, message: "A topic is required." };
+
+  try {
+    const { store } = await resolveTopicStore();
+    if (store.readOnlyReason) return { ok: false, message: store.readOnlyReason };
+    await store.deleteTopic(slug);
+  } catch (cause) {
+    if (cause instanceof TopicStoreError) return { ok: false, message: cause.message };
+    console.error(`${LOG_TAG} a topic could not be deleted:`, cause);
+    return {
+      ok: false,
+      message:
+        "The topic could not be deleted, and nothing was changed. The reason is in the server " +
+        "log, tagged [admin/topics].",
+    };
+  }
+
+  // Best-effort: the topic is already gone, so a channel-cleanup failure must not
+  // read as a failed delete — orphaned channel rows are never searched.
+  try {
+    const { store } = await resolveTopicChannelStore();
+    if (!store.readOnlyReason) await store.removeChannelsForTopic(slug);
+  } catch (cause) {
+    console.error(`${LOG_TAG} channels for the deleted topic could not be removed:`, cause);
+  }
+
+  revalidatePath(TOPICS_PATH);
+  return {
+    ok: true,
+    message:
+      "Deleted the topic and its channels. Clips it already found are kept in the Library with " +
+      "their label — the question is gone, the answers are not.",
+  };
+}
+
+/**
  * Put back any of the plan's thirty topics that are missing.
  *
  * NON-DESTRUCTIVE AND IT SAYS SO. It skips every slug already present, so a

@@ -75,6 +75,18 @@ describe("per-topic channels", () => {
       store.setChannelActive("american-artists", "youtube", "UC_missing", false),
     ).rejects.toThrow(TopicChannelStoreError);
   });
+
+  it("removes all of one topic's channels and leaves other topics' alone", async () => {
+    const store = new MemoryTopicChannelStore();
+    await store.addChannel({ topicSlug: "american-artists", platform: "youtube", channel: "UC_a" });
+    await store.addChannel({ topicSlug: "american-artists", platform: "instagram", channel: "@b" });
+    await store.addChannel({ topicSlug: "shark-tank", platform: "youtube", channel: "UC_c" });
+
+    await store.removeChannelsForTopic("american-artists");
+
+    expect(await store.listChannels("american-artists")).toEqual([]);
+    expect((await store.listChannels("shark-tank")).map((c) => c.channel)).toEqual(["UC_c"]);
+  });
 });
 
 describe("activeChannelsByPlatform", () => {
