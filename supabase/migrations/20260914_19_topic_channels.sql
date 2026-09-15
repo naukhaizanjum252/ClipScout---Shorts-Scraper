@@ -47,6 +47,13 @@ create table shorts_scraper.topic_channels (
   -- the same caveat as platform_seeds.last_fetched_ok_at.
   last_fetched_ok_at timestamptz,
 
+  -- When this channel was last used as a NexLev "find similar channels" SEED.
+  -- Null means never. It is how the optional NexLev booster
+  -- (lib/shorts/nexlev-boost.ts) rations a ~250-call/month quota: a channel is
+  -- seeded at most once, so total calls track how many NEW channels appear
+  -- rather than how often a run fires. YouTube only, since NexLev is YouTube-only.
+  nexlev_seeded_at   timestamptz,
+
   primary key (topic_slug, platform, channel)
 );
 

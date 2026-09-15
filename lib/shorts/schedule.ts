@@ -128,6 +128,7 @@ import {
 import { activeTopics, TopicsNotInstalledError, type TopicStore } from "./topic-store";
 import { channelMapForTopics, type TopicChannelStore } from "./topic-channels";
 import { growTopicChannels } from "./grow-channels";
+import { boostTopicChannelsWithNexlev, type SimilarChannelSource } from "./nexlev-boost";
 import type { Topic } from "./topics";
 import type { ShortsStore } from "./store";
 
@@ -801,6 +802,13 @@ export interface ScheduledRunOptions {
    * See lib/shorts/topic-channels.ts and lib/shorts/grow-channels.ts.
    */
   readonly channels?: TopicChannelStore;
+  /**
+   * The OPTIONAL NexLev booster — a YouTube-only "find similar channels" top-up
+   * on the self-grow, rationed against its tiny quota (lib/shorts/nexlev-boost.ts).
+   * Absent (no API key) means the evidence-based grow runs alone, which is the
+   * whole feature; this only broadens it. Scheduled pass only.
+   */
+  readonly nexlev?: SimilarChannelSource | null;
   readonly store: ShortsStore;
   readonly limit: number;
   readonly minViews: number;
@@ -1102,6 +1110,17 @@ export async function runOnSchedule(options: ScheduledRunOptions): Promise<Sched
       await growTopicChannels({ store: options.channels, shorts: candidates });
     } catch (cause) {
       console.error("[schedule] topic channels could not be grown:", cause);
+    }
+
+    // The optional NexLev booster, after the evidence-based grow and guarded the
+    // same way. It is rationed internally (seeded-once + a per-run call budget),
+    // so calling it every pass is safe; a failure never affects the run.
+    if (options.nexlev) {
+      try {
+        await boostTopicChannelsWithNexlev({ store: options.channels, nexlev: options.nexlev });
+      } catch (cause) {
+        console.error("[schedule] the NexLev boost could not run:", cause);
+      }
     }
   }
 

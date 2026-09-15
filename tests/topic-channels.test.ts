@@ -102,6 +102,7 @@ describe("activeChannelsByPlatform", () => {
     deactivated_at: null,
     deactivated_by: null,
     last_fetched_ok_at: null,
+    nexlev_seeded_at: null,
     ...over,
   });
 

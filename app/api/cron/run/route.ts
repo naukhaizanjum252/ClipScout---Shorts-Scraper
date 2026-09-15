@@ -164,6 +164,7 @@ import { SupabaseSeedStore } from "@/lib/shorts/seeds";
 import { SupabaseTopicStore } from "@/lib/shorts/topic-store";
 import { SupabaseTopicChannelStore } from "@/lib/shorts/topic-channels";
 import { SupabaseShortsStore } from "@/lib/shorts/supabase-store";
+import { NexLevClient } from "@/lib/discovery/nexlev";
 import {
   DB_SCHEMA,
   isSupabaseConfigured,
@@ -289,6 +290,10 @@ async function handle(request: Request): Promise<Response> {
       // from what performs, so the unattended pass keeps the lists current
       // between manual runs. Tolerant of migration 19 being unapplied.
       channels: new SupabaseTopicChannelStore(client),
+      // The optional NexLev booster: built only when NEXLEV_API_KEY is set,
+      // otherwise null and the evidence-based grow runs alone. It rations its
+      // own quota (see nexlev-boost.ts), so it is safe to hand to every pass.
+      nexlev: nexlevFromEnv(),
       store: new SupabaseShortsStore(client),
       limit: ROWS_PER_PLATFORM,
       minViews: minViews(),
@@ -372,6 +377,18 @@ function serviceClient(): TenantClient | null {
     auth: { persistSession: false },
     db: { schema: DB_SCHEMA },
   }) as TenantClient;
+}
+
+/**
+ * The NexLev similar-channels client, or null when no key is configured.
+ *
+ * Optional by design: the self-grow works without it, so an unset `NEXLEV_API_KEY`
+ * is "no booster", not a failure. The client rations its own quota (see
+ * lib/shorts/nexlev-boost.ts), so it needs no throttle of its own here.
+ */
+function nexlevFromEnv(): NexLevClient | null {
+  const key = (process.env.NEXLEV_API_KEY ?? "").trim();
+  return key ? new NexLevClient({ apiKey: key }) : null;
 }
 
 /** The words the response will not carry. An operator greps the log for these. */

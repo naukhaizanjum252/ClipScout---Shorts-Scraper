@@ -42,6 +42,8 @@ export interface TopicChannel {
   readonly deactivated_by: string | null;
   /** Last run of this topic+platform that finished ok while this was active. NOT proof it produced anything. */
   readonly last_fetched_ok_at: string | null;
+  /** When this channel was last used as a NexLev similarity SEED, or null. Rations the NexLev quota. */
+  readonly nexlev_seeded_at: string | null;
 }
 
 export interface NewTopicChannel {
@@ -136,6 +138,18 @@ export interface TopicChannelStore {
 
   /** Remove ALL of a topic's channels — used when the topic itself is deleted. */
   removeChannelsForTopic(topicSlug: string): Promise<void>;
+
+  /**
+   * Stamp `nexlev_seeded_at` on channels just used as NexLev similarity seeds,
+   * so the booster does not spend the quota on them again. See
+   * lib/shorts/nexlev-boost.ts.
+   */
+  markChannelsSeeded(
+    topicSlug: string,
+    platform: Platform,
+    channels: readonly string[],
+    at?: string,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +288,23 @@ export class SupabaseTopicChannelStore implements TopicChannelStore {
       .eq("topic_slug", topicSlug);
     if (error) throw new TopicChannelStoreError(`removeChannelsForTopic: ${error.message}`);
   }
+
+  async markChannelsSeeded(
+    topicSlug: string,
+    platform: Platform,
+    channels: readonly string[],
+    at: string = new Date().toISOString(),
+  ): Promise<void> {
+    const list = channels.map((c) => c.trim()).filter(Boolean);
+    if (list.length === 0) return;
+    const { error } = await this.client
+      .from(TOPIC_CHANNELS_TABLE)
+      .update({ nexlev_seeded_at: at })
+      .eq("topic_slug", topicSlug)
+      .eq("platform", platform)
+      .in("channel", list);
+    if (error) throw new TopicChannelStoreError(`markChannelsSeeded: ${error.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +353,7 @@ export class MemoryTopicChannelStore implements TopicChannelStore {
       deactivated_at: null,
       deactivated_by: null,
       last_fetched_ok_at: existing?.last_fetched_ok_at ?? null,
+      nexlev_seeded_at: existing?.nexlev_seeded_at ?? null,
     };
     this.rows.set(key(topicSlug, input.platform, channel), row);
     return row;
@@ -356,6 +388,20 @@ export class MemoryTopicChannelStore implements TopicChannelStore {
   async removeChannelsForTopic(topicSlug: string): Promise<void> {
     for (const [k, row] of this.rows) {
       if (row.topic_slug === topicSlug) this.rows.delete(k);
+    }
+  }
+
+  async markChannelsSeeded(
+    topicSlug: string,
+    platform: Platform,
+    channels: readonly string[],
+    at: string = new Date().toISOString(),
+  ): Promise<void> {
+    const want = new Set(channels.map((c) => c.trim()).filter(Boolean));
+    for (const [k, row] of this.rows) {
+      if (row.topic_slug === topicSlug && row.platform === platform && want.has(row.channel)) {
+        this.rows.set(k, { ...row, nexlev_seeded_at: at });
+      }
     }
   }
 }
